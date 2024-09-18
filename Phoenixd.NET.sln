@@ -1,0 +1,60 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.11.35303.130
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Phoenixd.NET.Core", "Phoenixd.NET.Core\Phoenixd.NET.Core.csproj", "{F06DC14A-1720-4DAA-96C9-E96041D05111}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Phoenixd.NET.WebService", "Phoenixd.NET.WebServiceClient\Phoenixd.NET.WebService.csproj", "{3C0BAB2A-3F08-43BB-B135-F4CF75612CC6}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{8C41B096-7E6F-4A74-A4EB-DF37E510B656}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "test", "test", "{DA8C8B78-EC5D-4099-952C-0371E70786C9}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Phoenixd.NET.Tests", "Phoenixd.NET.Core.Tests\Phoenixd.NET.Tests.csproj", "{A430BF60-DD4F-4FEC-A538-78B2A2736F46}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Phoenixd.NET", "Phoenixd.NET\Phoenixd.NET.csproj", "{77C25F13-E757-439C-BCEC-6B7E5EA84577}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution items", "Solution items", "{8702DFDD-411C-4FF2-A798-1D6EB9AF8437}"
+	ProjectSection(SolutionItems) = preProject
+		.gitignore = .gitignore
+		LICENSE = LICENSE
+		README.md = README.md
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F06DC14A-1720-4DAA-96C9-E96041D05111}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F06DC14A-1720-4DAA-96C9-E96041D05111}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F06DC14A-1720-4DAA-96C9-E96041D05111}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F06DC14A-1720-4DAA-96C9-E96041D05111}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3C0BAB2A-3F08-43BB-B135-F4CF75612CC6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3C0BAB2A-3F08-43BB-B135-F4CF75612CC6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3C0BAB2A-3F08-43BB-B135-F4CF75612CC6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3C0BAB2A-3F08-43BB-B135-F4CF75612CC6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A430BF60-DD4F-4FEC-A538-78B2A2736F46}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A430BF60-DD4F-4FEC-A538-78B2A2736F46}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A430BF60-DD4F-4FEC-A538-78B2A2736F46}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A430BF60-DD4F-4FEC-A538-78B2A2736F46}.Release|Any CPU.Build.0 = Release|Any CPU
+		{77C25F13-E757-439C-BCEC-6B7E5EA84577}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{77C25F13-E757-439C-BCEC-6B7E5EA84577}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{77C25F13-E757-439C-BCEC-6B7E5EA84577}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{77C25F13-E757-439C-BCEC-6B7E5EA84577}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{F06DC14A-1720-4DAA-96C9-E96041D05111} = {8C41B096-7E6F-4A74-A4EB-DF37E510B656}
+		{3C0BAB2A-3F08-43BB-B135-F4CF75612CC6} = {8C41B096-7E6F-4A74-A4EB-DF37E510B656}
+		{A430BF60-DD4F-4FEC-A538-78B2A2736F46} = {DA8C8B78-EC5D-4099-952C-0371E70786C9}
+		{77C25F13-E757-439C-BCEC-6B7E5EA84577} = {8C41B096-7E6F-4A74-A4EB-DF37E510B656}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {8B365EB1-93A1-44C5-BE81-F48AD6C473B6}
+	EndGlobalSection
+EndGlobal
