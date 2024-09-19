@@ -104,6 +104,121 @@ Make sure to replace the token in the settings file after you obtain it from the
 
 The SignalR hub named `PaymentHub` allows clients to receive payment notifications in real-time. Make sure your frontend clients are connected to `/paymentHub` for proper integration.
 
+### 6. Backend Controller and Blazor Client Sample for Payments
+
+The following code demonstrates a simple payment management controller and a Blazor client request sample to process Lightning payments.
+
+#### Backend Controller Sample
+
+```csharp
+[Route("api/payment-manager")]
+public class PaymentManagerController : Controller
+{
+    private readonly PhoenixdManagerService _phoenixdManagerService;
+
+    public PaymentManagerController(PhoenixdManagerService phoenixdManagerService)
+    {
+        _phoenixdManagerService = phoenixdManagerService;
+    }
+
+    [HttpGet("balance")]
+    public async Task<IActionResult> GetBalance()
+    {
+        var balance = await _phoenixdManagerService.NodeService.GetBalance();
+        return Ok(balance);
+    }
+
+    [HttpGet("node-info")]
+    public async Task<IActionResult> GetNodeInfo()
+    {
+        var nodeInfo = await _phoenixdManagerService.NodeService.GetNodeInfo();
+        return Ok(nodeInfo);
+    }
+
+    [HttpPost("receive-payment")]
+    public async Task<IActionResult> ReceiveLightningPayment([FromBody] ReceiveLightningPaymentRequest receiveLightningPaymentRequest)
+    {
+        var invoice = await _phoenixdManagerService.PaymentService.ReceiveLightningPaymentAsync(
+            receiveLightningPaymentRequest.Description, 
+            receiveLightningPaymentRequest.AmountSat, 
+            receiveLightningPaymentRequest.ExternalId
+        );
+        return Ok(invoice);
+    }
+}
+```
+
+#### Blazor Client Side Request Payment Sample Using QRCoder
+
+```csharp
+
+
+
+
+//QRCoder component
+@using QRCoder
+
+@if (!string.IsNullOrEmpty(Data))
+{
+    <div class="tab-pane payment-box" id="link-tab" role="tabpanel">
+        <div class="qr-container" data-clipboard="12">
+            <img style="image-rendering:pixelated;image-rendering:-moz-crisp-edges;min-width:@(Size)px;min-height:@(Size)px" src="@GetQRCodeData(Data, Amount)" class="qr-code" />
+            <img src="/img/..." class="qr-icon" alt="address-type-icon" />
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string Data { get; set; }
+
+    [Parameter]
+    public decimal? Amount { get; set; }
+
+    [Parameter]
+    public int Size { get; set; } = 256;
+
+    private string GetQRCodeData(string data, decimal? amount)
+    {
+        var qrGenerator = new QRCodeGenerator();
+        var qrCodeData = qrGenerator.CreateQrCode($"{data}?amount={amount}", QRCodeGenerator.ECCLevel.Q);
+        var qrCode = new PngByteQRCode(qrCodeData);
+        var bytes = qrCode.GetGraphic(5, new byte[] { 0, 0, 0, 255 }, new byte[] { 0xf5, 0xf5, 0xf7, 255 });
+        return $"data:image/png;base64,{Convert.ToBase64String(bytes)}";
+    }
+}
+
+
+//Blazor client sample
+<QRCode Data="@addressValue" Amount="@addressAmountValue"></QRCode>
+
+@code {
+    private async Task SendLightningPaymentRequest()
+    {
+        try
+        {
+            model.ExternalId = connectionId;
+
+            var httpClient = new HttpClient { BaseAddress = new Uri("https://localhost:44379/") };
+            var response = await httpClient.PostAsJsonAsync("api/payment-manager/receive-payment", model);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var invoice = await response.Content.ReadFromJsonAsync<Invoice>();
+                addressValue = invoice.Serialized;
+                addressAmountValue = invoice.AmountSat;
+            }
+        }
+        catch(Exception ex)
+        {
+            //Handle error...
+        }
+
+        StateHasChanged();
+    }
+}
+```
+
 ## Additional Information
 
 - **Phoenixd** is a server-side solution for managing Bitcoin and Lightning payments using ACINQ's [Phoenix app](https://phoenix.acinq.co/app).
