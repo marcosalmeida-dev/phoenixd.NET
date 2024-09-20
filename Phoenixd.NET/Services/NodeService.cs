@@ -1,7 +1,7 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using System.Net.Http.Json;
+using Microsoft.Extensions.Logging;
 using Phoenixd.NET.Core.Interfaces;
 using Phoenixd.NET.Core.Models;
-using System.Net.Http.Json;
 
 namespace Phoenixd.NET.Services;
 

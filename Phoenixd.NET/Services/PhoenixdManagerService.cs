@@ -1,11 +1,10 @@
-﻿using Microsoft.AspNetCore.SignalR;
+﻿using System.Text.Json;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using Phoenixd.NET.Core.Hubs;
 using Phoenixd.NET.Core.Interfaces;
+using Phoenixd.NET.Core.Models;
 using Phoenixd.NET.WebService.Client;
-using Phoenixd.NET.WebServiceClient.Services;
-using System;
-using System.Threading.Tasks;
 
 namespace Phoenixd.NET.Services
 {
@@ -13,54 +12,48 @@ namespace Phoenixd.NET.Services
     {
         private readonly HttpClient _httpClient;
         private readonly PhoenixdClient _phoenixdClient;
-        private readonly INodeService _nodeService;
-        private readonly IPaymentService _paymentService;
         private readonly IHubContext<PaymentHub> _hubContext;
         private readonly ILogger<PhoenixdManagerService> _logger;
+
+        public readonly INodeService NodeService;
+        public readonly IPaymentService PaymentService;
 
         public PhoenixdManagerService(
             HttpClient httpClient,
             PhoenixdClient phoenixdClient,
+            IHubContext<PaymentHub> hubContext,
             INodeService nodeService,
             IPaymentService paymentService,
-            IHubContext<PaymentHub> hubContext,
             ILogger<PhoenixdManagerService> logger)
         {
             _httpClient = httpClient;
             _phoenixdClient = phoenixdClient;
-            _nodeService = nodeService;
-            _paymentService = paymentService;
             _hubContext = hubContext;
             _logger = logger;
+
+            NodeService = nodeService;
+            PaymentService = paymentService;
 
             _phoenixdClient.OnMessageReceived += OnMessageReceived;
         }
 
         private async void OnMessageReceived(string message)
         {
-            // Extract the connection ID or user information from the message to determine the recipient
-            string connectionId = ExtractConnectionId(message);
+            var paymentReceived = JsonSerializer.Deserialize<PaymentReceived>(message);
 
-            if (!string.IsNullOrEmpty(connectionId))
+            if (!string.IsNullOrEmpty(paymentReceived?.ExternalId))
             {
                 try
                 {
                     // Send the message to the specific client
-                    await _hubContext.Clients.Client(connectionId).SendAsync("ReceiveMessage", message);
-                    _logger.LogInformation($"Message sent to client with ConnectionId: {connectionId}");
+                    await _hubContext.Clients.Client(paymentReceived.ExternalId).SendAsync("ReceiveMessage", message);
+                    _logger.LogInformation($"Message sent to client with ConnectionId: {paymentReceived.ExternalId}");
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, $"Error sending message to client {connectionId}");
+                    _logger.LogError(ex, $"Error sending message to client {paymentReceived.ExternalId}");
                 }
             }
-        }
-
-        private string ExtractConnectionId(string message)
-        {
-            // Implement logic to extract connection ID from the message
-            // For simplicity, assume the message contains the connection ID
-            return message; // Replace with actual extraction logic
         }
     }
 }

@@ -7,7 +7,7 @@ namespace Phoenixd.NET.WebService.Client;
 
 public class PhoenixdClient
 {
-    private PhoenixConfig _phoenixConfig;
+    private readonly PhoenixConfig _phoenixConfig;
     private readonly ILogger<PhoenixdClient> _logger;
     private ClientWebSocket _webSocket;
 
@@ -19,7 +19,7 @@ public class PhoenixdClient
         _logger = logger;
     }
 
-    public async Task ConnectWebSocketAsync()
+    internal async Task ConnectWebSocketAsync()
     {
         var wsHost = _phoenixConfig.Host.Replace("http://", "").Replace("https://", "");
         var tokenBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes($":{_phoenixConfig.Token}"));
@@ -73,7 +73,7 @@ public class PhoenixdClient
         }
     }
 
-    public async Task DisconnectWebSocketAsync()
+    internal async Task DisconnectWebSocketAsync()
     {
         if (_webSocket != null)
         {

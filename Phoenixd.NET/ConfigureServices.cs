@@ -1,61 +1,88 @@
-﻿using Microsoft.AspNetCore.Builder;
+﻿using System.Net.Http.Headers;
+using System.Text;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Phoenixd.NET.Core.Hubs;
 using Phoenixd.NET.Core.Interfaces;
 using Phoenixd.NET.Core.Models;
 using Phoenixd.NET.Services;
 using Phoenixd.NET.WebService.Client;
 using Phoenixd.NET.WebServiceClient.Services;
-using System.Net.Http.Headers;
-using System.Text;
 
 namespace Phoenixd.NET;
 
 public static class ServiceCollection
 {
-    public static IServiceCollection ConfigurePhoenixdServices(this WebApplicationBuilder builder, HttpClient httpClient)
+    public static IServiceCollection ConfigurePhoenixdServices(this IServiceCollection services, IConfiguration configuration)
     {
         // Retrieve or set PhoenixConfig here
-        var phoenixConfig = builder.Configuration.GetSection("PhoenixConfig").Get<PhoenixConfig>();
+        var phoenixConfig = configuration.GetSection("PhoenixConfig").Get<PhoenixConfig>();
 
         if (phoenixConfig == null)
         {
             throw new ArgumentException("PhoenixConfig not found.");
         }
 
-        // Configure the HttpClient with the PhoenixConfig settings
-        httpClient.BaseAddress = new Uri(phoenixConfig.Host);
-
-        var byteArray = Encoding.UTF8.GetBytes($"{phoenixConfig.Username}:{phoenixConfig.Token}");
-        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(byteArray));
-
         // Register PhoenixConfig as a singleton
-        builder.Services.AddSingleton(phoenixConfig);
-
-        // Register the HttpClient instance as a singleton
-        builder.Services.AddSingleton(httpClient);
+        services.AddSingleton(phoenixConfig);
 
         // Register the PhoenixdClient
-        builder.Services.AddSingleton<PhoenixdClient>(provider =>
+        services.AddSingleton<PhoenixdClient>(provider =>
         {
             var logger = provider.GetRequiredService<ILogger<PhoenixdClient>>();
             return new PhoenixdClient(phoenixConfig, logger);
         });
 
-        // Register the PhoenixdClientBackgroundService
-        builder.Services.AddHostedService<PhoenixdClientBackgroundService>();
+        // Register IHttpClientFactory and configure the named client
+        services.AddHttpClient("PhoenixdHttpClient", client =>
+        {
+            client.BaseAddress = new Uri(phoenixConfig.Host);
+            var byteArray = Encoding.UTF8.GetBytes($"{phoenixConfig.Username}:{phoenixConfig.Token}");
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(byteArray));
+        });
 
-        // Register NodeService and PaymentService
-        builder.Services.AddScoped<INodeService, NodeService>();
-        builder.Services.AddScoped<IPaymentService, PaymentService>();
+        services.AddSingleton<INodeService>(provider =>
+        {
+            var clientFactory = provider.GetRequiredService<IHttpClientFactory>();
+            var httpClient = clientFactory.CreateClient("PhoenixdHttpClient");
+            var logger = provider.GetRequiredService<ILogger<NodeService>>();
+            return new NodeService(httpClient, logger);
+        });
+
+        services.AddSingleton<IPaymentService>(provider =>
+        {
+            var clientFactory = provider.GetRequiredService<IHttpClientFactory>();
+            var httpClient = clientFactory.CreateClient("PhoenixdHttpClient");
+            var logger = provider.GetRequiredService<ILogger<PaymentService>>();
+            return new PaymentService(httpClient, logger);
+        });
+
+        // Register the PhoenixdClientBackgroundService
+        services.AddHostedService<PhoenixdClientBackgroundService>(provider =>
+        {
+            var phoenixdClient = provider.GetRequiredService<PhoenixdClient>();
+            var logger = provider.GetRequiredService<ILogger<PhoenixdClientBackgroundService>>();
+            return new PhoenixdClientBackgroundService(phoenixdClient, logger);
+        });
 
         // Register the PhoenixdManagerService
-        builder.Services.AddSingleton<PhoenixdManagerService>();
+        services.AddSingleton<PhoenixdManagerService>(provider =>
+        {
+            var clientFactory = provider.GetRequiredService<IHttpClientFactory>();
+            var httpClient = clientFactory.CreateClient("PhoenixdHttpClient");
+            var phoenixdClient = provider.GetRequiredService<PhoenixdClient>();
 
-        // Register SignalR hub
-        builder.Services.AddSignalR();
+            var hubContext = provider.GetRequiredService<IHubContext<PaymentHub>>();
+            var nodeService = provider.GetRequiredService<INodeService>();
+            var paymentService = provider.GetRequiredService<IPaymentService>();
 
-        return builder.Services;
+            var logger = provider.GetRequiredService<ILogger<PhoenixdManagerService>>();
+
+            return new PhoenixdManagerService(httpClient, phoenixdClient, hubContext, nodeService, paymentService, logger);
+        });
+
+        return services;
     }
 }

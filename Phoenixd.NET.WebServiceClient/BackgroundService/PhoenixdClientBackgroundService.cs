@@ -19,7 +19,6 @@ public class PhoenixdClientBackgroundService : BackgroundService
     {
         try
         {
-            _phoenixdClient.OnMessageReceived += HandleMessageReceived;
             await _phoenixdClient.ConnectWebSocketAsync();
 
             stoppingToken.Register(async () =>
@@ -32,10 +31,5 @@ public class PhoenixdClientBackgroundService : BackgroundService
         {
             _logger.LogError(ex, "Error in PhoenixdClientBackgroundService");
         }
-    }
-
-    private void HandleMessageReceived(string message)
-    {
-        // Handle the message or pass it to a service to handle
     }
 }
