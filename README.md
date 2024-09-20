@@ -221,7 +221,7 @@ public class PaymentManagerController : Controller
 
 ## Additional Information
 
-- **Phoenixd** is a server-side solution for managing Bitcoin and Lightning payments using ACINQ's [Phoenix app](https://phoenix.acinq.co/app).
+- **Phoenixd** is a server-side solution for managing Bitcoin and Lightning payments using ACINQ's [Phoenix app](https://phoenix.acinq.co/).
 - **SignalR** is used for real-time communication between the .NET backend and clients.
 - The project is designed to work seamlessly with **Blazor** and can be extended to other frontend frameworks.
 
