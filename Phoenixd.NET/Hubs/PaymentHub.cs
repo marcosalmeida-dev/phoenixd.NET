@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.SignalR;
 using System.Collections.Concurrent;
 
-namespace Phoenixd.NET.Core.Hubs;
+namespace Phoenixd.NET.Hubs;
 
 public class PaymentHub : Hub
 {

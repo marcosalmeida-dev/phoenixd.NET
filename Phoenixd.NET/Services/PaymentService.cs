@@ -1,9 +1,9 @@
 ﻿using System.Net.Http.Json;
 using Microsoft.Extensions.Logging;
-using Phoenixd.NET.Core.Interfaces;
-using Phoenixd.NET.Core.Models;
+using Phoenixd.NET.Interfaces;
+using Phoenixd.NET.Models;
 
-namespace Phoenixd.NET.WebServiceClient.Services;
+namespace Phoenixd.NET.Services;
 
 internal class PaymentService : IPaymentService
 {

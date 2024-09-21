@@ -2,7 +2,7 @@
 using Microsoft.Extensions.Logging;
 using Phoenixd.NET.WebService.Client;
 
-namespace Phoenixd.NET.WebServiceClient.Services;
+namespace Phoenixd.NET.Services;
 
 public class PhoenixdClientBackgroundService : BackgroundService
 {

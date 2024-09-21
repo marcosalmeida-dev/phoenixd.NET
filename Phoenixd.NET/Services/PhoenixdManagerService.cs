@@ -1,9 +1,9 @@
 ﻿using System.Text.Json;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
-using Phoenixd.NET.Core.Hubs;
-using Phoenixd.NET.Core.Interfaces;
-using Phoenixd.NET.Core.Models;
+using Phoenixd.NET.Hubs;
+using Phoenixd.NET.Interfaces;
+using Phoenixd.NET.Models;
 using Phoenixd.NET.WebService.Client;
 
 namespace Phoenixd.NET.Services
@@ -45,8 +45,7 @@ namespace Phoenixd.NET.Services
             {
                 try
                 {
-                    // Send the message to the specific client
-                    await _hubContext.Clients.Client(paymentReceived.ExternalId).SendAsync("ReceiveMessage", message);
+                    await _hubContext.Clients.Client(paymentReceived.ExternalId).SendAsync("ReceivePayment", paymentReceived);
                     _logger.LogInformation($"Message sent to client with ConnectionId: {paymentReceived.ExternalId}");
                 }
                 catch (Exception ex)

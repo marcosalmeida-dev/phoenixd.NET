@@ -13,11 +13,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include=".docker\phoenixd\Dockerfile" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\Phoenixd.NET.Core\Phoenixd.NET.Core.csproj" />
+    <ProjectReference Include="..\Phoenixd.NET\Phoenixd.NET.csproj" />
   </ItemGroup>
 
 </Project>

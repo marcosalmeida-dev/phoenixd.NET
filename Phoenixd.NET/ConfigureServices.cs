@@ -4,12 +4,11 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Phoenixd.NET.Core.Hubs;
-using Phoenixd.NET.Core.Interfaces;
-using Phoenixd.NET.Core.Models;
+using Phoenixd.NET.Hubs;
+using Phoenixd.NET.Interfaces;
+using Phoenixd.NET.Models;
 using Phoenixd.NET.Services;
 using Phoenixd.NET.WebService.Client;
-using Phoenixd.NET.WebServiceClient.Services;
 
 namespace Phoenixd.NET;
 

@@ -1,5 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
-using Phoenixd.NET.Core.Models;
+using Phoenixd.NET.Models;
 using System.Net.WebSockets;
 using System.Text;
 

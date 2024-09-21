@@ -1,6 +1,6 @@
-﻿using Phoenixd.NET.Core.Models;
+﻿using Phoenixd.NET.Models;
 
-namespace Phoenixd.NET.Core.Interfaces;
+namespace Phoenixd.NET.Interfaces;
 
 public interface IPaymentService
 {

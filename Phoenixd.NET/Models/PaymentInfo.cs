@@ -1,4 +1,4 @@
-namespace Phoenixd.NET.Core.Models;
+namespace Phoenixd.NET.Models;
 
 public class PaymentInfo
 {
