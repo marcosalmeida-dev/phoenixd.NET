@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using Moq;
-using Phoenixd.NET.Core.Models;
-using Phoenixd.NET.WebServiceClient.Services;
+using Phoenixd.NET.Interfaces;
+using Phoenixd.NET.Models;
 using RichardSzalay.MockHttp;
 using System.Net;
 using System.Net.Http.Json;
@@ -10,20 +10,20 @@ namespace Phoenixd.NET.Tests.Services;
 
 public class PaymentServiceTests
 {
-    private readonly Mock<ILogger<PaymentService>> _mockLogger;
+    private readonly Mock<ILogger<IPaymentService>> _mockLogger;
     private readonly MockHttpMessageHandler _mockHttpMessageHandler;
     private readonly HttpClient _httpClient;
-    private readonly PaymentService _paymentService;
+    private readonly Mock<IPaymentService> _mockPaymentService;
 
     public PaymentServiceTests()
     {
-        _mockLogger = new Mock<ILogger<PaymentService>>();
+        _mockLogger = new Mock<ILogger<IPaymentService>>();
         _mockHttpMessageHandler = new MockHttpMessageHandler();
         _httpClient = new HttpClient(_mockHttpMessageHandler)
         {
             BaseAddress = new Uri("http://localhost")
         };
-        _paymentService = new PaymentService(_httpClient, _mockLogger.Object);
+        _mockPaymentService = new Mock<IPaymentService>();
     }
 
     [Fact]
@@ -31,12 +31,12 @@ public class PaymentServiceTests
     {
         // Arrange
         var expectedInvoice = new Invoice { AmountSat = 1000, PaymentHash = "hash123" };
-        _mockHttpMessageHandler
-            .When("/createinvoice")
-            .Respond(HttpStatusCode.OK, JsonContent.Create(expectedInvoice));
+        _mockPaymentService
+            .Setup(service => service.ReceiveLightningPaymentAsync(It.IsAny<string>(), It.IsAny<long>(), It.IsAny<string>()))
+            .ReturnsAsync(expectedInvoice);
 
         // Act
-        var result = await _paymentService.ReceiveLightningPaymentAsync("Test payment", 1000);
+        var result = await _mockPaymentService.Object.ReceiveLightningPaymentAsync("Test payment", 1000);
 
         // Assert
         Assert.NotNull(result);
@@ -49,12 +49,12 @@ public class PaymentServiceTests
     {
         // Arrange
         var expectedResponse = new PayInvoiceResponse { RecipientAmountSat = 1000, PaymentHash = "hash123" };
-        _mockHttpMessageHandler
-            .When("/payinvoice")
-            .Respond(HttpStatusCode.OK, JsonContent.Create(expectedResponse));
+        _mockPaymentService
+            .Setup(service => service.SendLightningInvoice(It.IsAny<long>(), It.IsAny<string>()))
+            .ReturnsAsync(expectedResponse);
 
         // Act
-        var result = await _paymentService.SendLightningInvoice(1000, "invoice123");
+        var result = await _mockPaymentService.Object.SendLightningInvoice(1000, "invoice123");
 
         // Assert
         Assert.NotNull(result);
@@ -67,12 +67,12 @@ public class PaymentServiceTests
     {
         // Arrange
         var expectedResponse = "tx123";
-        _mockHttpMessageHandler
-            .When("/sendtoaddress")
-            .Respond(HttpStatusCode.OK, new StringContent(expectedResponse));
+        _mockPaymentService
+            .Setup(service => service.SendOnchainPayment(It.IsAny<long>(), It.IsAny<string>(), It.IsAny<int>()))
+            .ReturnsAsync(expectedResponse);
 
         // Act
-        var result = await _paymentService.SendOnchainPayment(1000, "address123", 10);
+        var result = await _mockPaymentService.Object.SendOnchainPayment(1000, "address123", 10);
 
         // Assert
         Assert.NotNull(result);
@@ -87,12 +87,12 @@ public class PaymentServiceTests
         {
             new PaymentInfo { PaymentHash = "hash123", ReceivedSat = 1000 }
         };
-        _mockHttpMessageHandler
-            .When("/payments/incoming")
-            .Respond(HttpStatusCode.OK, JsonContent.Create(expectedPayments));
+        _mockPaymentService
+            .Setup(service => service.ListIncomingPayments(It.IsAny<string>()))
+            .ReturnsAsync(expectedPayments);
 
         // Act
-        var result = await _paymentService.ListIncomingPayments("externalId123");
+        var result = await _mockPaymentService.Object.ListIncomingPayments("externalId123");
 
         // Assert
         Assert.NotNull(result);
@@ -105,12 +105,12 @@ public class PaymentServiceTests
     {
         // Arrange
         var expectedPaymentInfo = new PaymentInfo { PaymentHash = "hash123", ReceivedSat = 1000 };
-        _mockHttpMessageHandler
-            .When("/payments/incoming/hash123")
-            .Respond(HttpStatusCode.OK, JsonContent.Create(expectedPaymentInfo));
+        _mockPaymentService
+            .Setup(service => service.GetIncomingPayment(It.IsAny<string>()))
+            .ReturnsAsync(expectedPaymentInfo);
 
         // Act
-        var result = await _paymentService.GetIncomingPayment("hash123");
+        var result = await _mockPaymentService.Object.GetIncomingPayment("hash123");
 
         // Assert
         Assert.NotNull(result);
@@ -122,12 +122,12 @@ public class PaymentServiceTests
     {
         // Arrange
         var expectedPaymentInfoOutgoing = new PaymentInfoOutgoing { PaymentHash = "hash123", Sent = 1000 };
-        _mockHttpMessageHandler
-            .When("/payments/outgoing/payment123")
-            .Respond(HttpStatusCode.OK, JsonContent.Create(expectedPaymentInfoOutgoing));
+        _mockPaymentService
+            .Setup(service => service.GetOutgoingPayment(It.IsAny<string>()))
+            .ReturnsAsync(expectedPaymentInfoOutgoing);
 
         // Act
-        var result = await _paymentService.GetOutgoingPayment("payment123");
+        var result = await _mockPaymentService.Object.GetOutgoingPayment("payment123");
 
         // Assert
         Assert.NotNull(result);

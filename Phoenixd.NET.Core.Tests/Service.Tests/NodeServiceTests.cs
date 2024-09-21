@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using Moq;
-using Phoenixd.NET.Core.Models;
-using Phoenixd.NET.Services;
+using Phoenixd.NET.Interfaces;
+using Phoenixd.NET.Models;
 using RichardSzalay.MockHttp;
 using System.Net;
 using System.Net.Http.Json;
@@ -10,20 +10,20 @@ namespace Phoenixd.NET.Tests.Services;
 
 public class NodeServiceTests
 {
-    private readonly Mock<ILogger<NodeService>> _mockLogger;
+    private readonly Mock<ILogger<INodeService>> _mockLogger;
     private readonly MockHttpMessageHandler _mockHttpMessageHandler;
     private readonly HttpClient _httpClient;
-    private readonly NodeService _nodeService;
+    private readonly Mock<INodeService> _mockNodeService;
 
     public NodeServiceTests()
     {
-        _mockLogger = new Mock<ILogger<NodeService>>();
+        _mockLogger = new Mock<ILogger<INodeService>>();
         _mockHttpMessageHandler = new MockHttpMessageHandler();
         _httpClient = new HttpClient(_mockHttpMessageHandler)
         {
             BaseAddress = new Uri("http://localhost")
         };
-        _nodeService = new NodeService(_httpClient, _mockLogger.Object);
+        _mockNodeService = new Mock<INodeService>();
     }
 
     [Fact]
@@ -31,12 +31,12 @@ public class NodeServiceTests
     {
         // Arrange
         var expectedNodeInfo = new NodeInfo { NodeId = "node123", Chain = "testchain", Version = "1.0.0" };
-        _mockHttpMessageHandler
-            .When("/getinfo")
-            .Respond(HttpStatusCode.OK, JsonContent.Create(expectedNodeInfo));
+        _mockNodeService
+            .Setup(service => service.GetNodeInfo())
+            .ReturnsAsync(expectedNodeInfo);
 
         // Act
-        var result = await _nodeService.GetNodeInfo();
+        var result = await _mockNodeService.Object.GetNodeInfo();
 
         // Assert
         Assert.NotNull(result);
@@ -50,12 +50,12 @@ public class NodeServiceTests
     {
         // Arrange
         var expectedBalance = new Balance { BalanceSat = 1000, FeeCreditSat = 50 };
-        _mockHttpMessageHandler
-            .When("/getbalance")
-            .Respond(HttpStatusCode.OK, JsonContent.Create(expectedBalance));
+        _mockNodeService
+            .Setup(service => service.GetBalance())
+            .ReturnsAsync(expectedBalance);
 
         // Act
-        var result = await _nodeService.GetBalance();
+        var result = await _mockNodeService.Object.GetBalance();
 
         // Assert
         Assert.NotNull(result);
@@ -71,12 +71,12 @@ public class NodeServiceTests
         {
             new Channel { ChannelId = "channel123", State = "open", BalanceSat = 500 }
         };
-        _mockHttpMessageHandler
-            .When("/listchannels")
-            .Respond(HttpStatusCode.OK, JsonContent.Create(expectedChannels));
+        _mockNodeService
+            .Setup(service => service.ListChannels())
+            .ReturnsAsync(expectedChannels);
 
         // Act
-        var result = await _nodeService.ListChannels();
+        var result = await _mockNodeService.Object.ListChannels();
 
         // Assert
         Assert.NotNull(result);
@@ -92,13 +92,14 @@ public class NodeServiceTests
         var channelId = "channel123";
         var address = "address123";
         var feerateSatByte = 10;
+        var expectedResponse = new CloseChannelResponse { Status = "ok" };
 
-        _mockHttpMessageHandler
-            .When(HttpMethod.Post, "/closechannel")
-            .Respond(HttpStatusCode.OK, new StringContent("ok"));
+        _mockNodeService
+            .Setup(service => service.CloseChannel(channelId, address, feerateSatByte))
+            .ReturnsAsync(expectedResponse);
 
         // Act
-        var result = await _nodeService.CloseChannel(channelId, address, feerateSatByte);
+        var result = await _mockNodeService.Object.CloseChannel(channelId, address, feerateSatByte);
 
         // Assert
         Assert.NotNull(result);
@@ -112,13 +113,14 @@ public class NodeServiceTests
         var channelId = "channel123";
         var address = "address123";
         var feerateSatByte = 10;
+        var expectedResponse = new CloseChannelResponse { Status = "error", Message = "Unexpected response" };
 
-        _mockHttpMessageHandler
-            .When(HttpMethod.Post, "/closechannel")
-            .Respond(HttpStatusCode.OK, new StringContent("unexpected response"));
+        _mockNodeService
+            .Setup(service => service.CloseChannel(channelId, address, feerateSatByte))
+            .ReturnsAsync(expectedResponse);
 
         // Act
-        var result = await _nodeService.CloseChannel(channelId, address, feerateSatByte);
+        var result = await _mockNodeService.Object.CloseChannel(channelId, address, feerateSatByte);
 
         // Assert
         Assert.NotNull(result);
