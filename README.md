@@ -35,7 +35,7 @@ To set up the backend with Phoenixd services in your .NET 8 project, configure t
 
 ```csharp
 using Phoenixd.NET;
-using Phoenixd.NET.Core.Hubs;
+using Phoenixd.NET.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -89,7 +89,7 @@ _hubConnection.On<PaymentReceived>("ReceivePayment", async (payment) =>
 
 The project can be built and run using Docker. The Dockerfile for the phoenixd.NET web service client is located at the following path:
 
-[Dockerfile](https://github.com/marcosalmeida-dev/phoenixd.NET/blob/main/Phoenixd.NET.WebServiceClient/.docker/phoenixd/Dockerfile)
+[Dockerfile](https://github.com/marcosalmeida-dev/phoenixd.NET/blob/main/Phoenixd.NET/.docker/phoenixd/Dockerfile)
 
 To run the service, use the following commands:
 
