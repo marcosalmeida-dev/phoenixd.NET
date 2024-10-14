@@ -19,11 +19,12 @@ public class PhoenixdClientBackgroundService : BackgroundService
     {
         try
         {
+            _logger.LogInformation("PhoenixdClientBackgroundService service starting...");
             await _phoenixdClient.ConnectWebSocketAsync();
 
             stoppingToken.Register(async () =>
             {
-                _logger.LogInformation("Background service stopping.");
+                _logger.LogInformation("PhoenixdClientBackgroundService service stopping.");
                 await _phoenixdClient.DisconnectWebSocketAsync();
             });
         }
