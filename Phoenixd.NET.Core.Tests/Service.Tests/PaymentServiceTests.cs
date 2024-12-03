@@ -6,7 +6,7 @@ using RichardSzalay.MockHttp;
 using System.Net;
 using System.Net.Http.Json;
 
-namespace Phoenixd.NET.Tests.Services;
+namespace Phoenixd.NET.Tests.Service.Tests;
 
 public class PaymentServiceTests
 {
