@@ -1,28 +1,15 @@
-﻿using Microsoft.Extensions.Logging;
-using Moq;
+﻿using Moq;
 using Phoenixd.NET.Interfaces;
 using Phoenixd.NET.Models;
-using RichardSzalay.MockHttp;
-using System.Net;
-using System.Net.Http.Json;
 
 namespace Phoenixd.NET.Tests.Service.Tests;
 
 public class PaymentServiceTests
 {
-    private readonly Mock<ILogger<IPaymentService>> _mockLogger;
-    private readonly MockHttpMessageHandler _mockHttpMessageHandler;
-    private readonly HttpClient _httpClient;
     private readonly Mock<IPaymentService> _mockPaymentService;
 
     public PaymentServiceTests()
     {
-        _mockLogger = new Mock<ILogger<IPaymentService>>();
-        _mockHttpMessageHandler = new MockHttpMessageHandler();
-        _httpClient = new HttpClient(_mockHttpMessageHandler)
-        {
-            BaseAddress = new Uri("http://localhost")
-        };
         _mockPaymentService = new Mock<IPaymentService>();
     }
 

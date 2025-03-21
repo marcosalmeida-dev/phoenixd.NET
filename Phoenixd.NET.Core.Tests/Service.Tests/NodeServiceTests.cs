@@ -1,28 +1,15 @@
-﻿using Microsoft.Extensions.Logging;
-using Moq;
+﻿using Moq;
 using Phoenixd.NET.Interfaces;
 using Phoenixd.NET.Models;
-using RichardSzalay.MockHttp;
-using System.Net;
-using System.Net.Http.Json;
 
 namespace Phoenixd.NET.Tests.Service.Tests;
 
 public class NodeServiceTests
 {
-    private readonly Mock<ILogger<INodeService>> _mockLogger;
-    private readonly MockHttpMessageHandler _mockHttpMessageHandler;
-    private readonly HttpClient _httpClient;
     private readonly Mock<INodeService> _mockNodeService;
 
     public NodeServiceTests()
     {
-        _mockLogger = new Mock<ILogger<INodeService>>();
-        _mockHttpMessageHandler = new MockHttpMessageHandler();
-        _httpClient = new HttpClient(_mockHttpMessageHandler)
-        {
-            BaseAddress = new Uri("http://localhost")
-        };
         _mockNodeService = new Mock<INodeService>();
     }
 
