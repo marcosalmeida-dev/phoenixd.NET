@@ -2,8 +2,8 @@
 FROM eclipse-temurin:21-jdk-jammy AS BUILD
 
 # Set necessary args and environment variables for building phoenixd
-ARG PHOENIXD_BRANCH=v0.4.2
-ARG PHOENIXD_COMMIT_HASH=24b817ae70afe986d73df378777010799269b74e
+ARG PHOENIXD_BRANCH=v0.5.1
+ARG PHOENIXD_COMMIT_HASH=ab9a026432a61d986d83c72df5619014414557be
 
 # Upgrade all packages and install dependencies
 RUN apt-get update \
@@ -16,25 +16,25 @@ WORKDIR /phoenixd
 RUN git clone --recursive --single-branch --branch ${PHOENIXD_BRANCH} -c advice.detachedHead=false \
     https://github.com/ACINQ/phoenixd . \
     && test `git rev-parse HEAD` = ${PHOENIXD_COMMIT_HASH} || exit 1 \
-    && ./gradlew distTar
+    && ./gradlew jvmDistTar
 
-# Alpine image to minimize final image size
-FROM eclipse-temurin:21-jre-alpine as FINAL
+# JRE image to minimize final image size
+FROM eclipse-temurin:21-jre-jammy as FINAL
 
 # Upgrade all packages and install dependencies
-RUN apk update \
-    && apk upgrade --no-interactive
-RUN apk add --update --no-cache bash
+RUN apt-get update \
+    && apt-get upgrade -y
+RUN apt-get install -y --no-install-recommends bash
 
 # Create a phoenix group and user
-RUN addgroup -S phoenix -g 1000 \
-    && adduser -S phoenix -G phoenix -u 1000 -h /phoenix
+RUN addgroup --system phoenix --gid 1000 \
+    && adduser --system phoenix --ingroup phoenix --uid 1000 --home /phoenix
 USER phoenix
 
 # Unpack the release
 WORKDIR /phoenix
-COPY --chown=phoenix:phoenix --from=BUILD /phoenixd/build/distributions/phoenix-*-jvm.tar .
-RUN tar --strip-components=1 -xvf phoenix-*-jvm.tar
+COPY --chown=phoenix:phoenix --from=BUILD /phoenixd/build/distributions/phoenixd-*-jvm.tar .
+RUN tar --strip-components=1 -xvf phoenixd-*-jvm.tar
 
 # Indicate that the container listens on port 9740
 EXPOSE 9740
