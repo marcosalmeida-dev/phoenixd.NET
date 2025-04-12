@@ -35,7 +35,13 @@ internal class PaymentService : IPaymentService
             response.EnsureSuccessStatusCode();
             _logger.LogInformation("Lightning payment created successfully.");
 
-            return await response.Content.ReadFromJsonAsync<Invoice>(); 
+            var invoice = await response.Content.ReadFromJsonAsync<Invoice>();
+            if (invoice == null)
+            {
+                throw new InvalidOperationException("The response content could not be deserialized into an Invoice object.");
+            }
+
+            return invoice;
         }
         catch (Exception ex)
         {
@@ -57,7 +63,14 @@ internal class PaymentService : IPaymentService
             var response = await _httpClient.PostAsync("/payinvoice", new FormUrlEncodedContent(data));
             response.EnsureSuccessStatusCode();
             _logger.LogInformation("Lightning invoice sent successfully.");
-            return await response.Content.ReadFromJsonAsync<PayInvoiceResponse>();
+
+            var payInvoiceResponse = await response.Content.ReadFromJsonAsync<PayInvoiceResponse>();
+            if (payInvoiceResponse == null)
+            {
+                throw new InvalidOperationException("The response content could not be deserialized into a PayInvoiceResponse object.");
+            }
+
+            return payInvoiceResponse;
         }
         catch (Exception ex)
         {
@@ -95,7 +108,14 @@ internal class PaymentService : IPaymentService
         {
             var response = await _httpClient.GetAsync($"/payments/incoming?externalId={externalId}");
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<List<PaymentInfo>>();
+
+            var paymentInfos = await response.Content.ReadFromJsonAsync<List<PaymentInfo>>();
+            if (paymentInfos == null)
+            {
+                throw new InvalidOperationException("The response content could not be deserialized into a List<PaymentInfo> object.");
+            }
+
+            return paymentInfos;
         }
         catch (Exception ex)
         {
@@ -110,7 +130,14 @@ internal class PaymentService : IPaymentService
         {
             var response = await _httpClient.GetAsync($"/payments/incoming/{paymentHash}");
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<PaymentInfo>();
+
+            var paymentInfo = await response.Content.ReadFromJsonAsync<PaymentInfo>();
+            if (paymentInfo == null)
+            {
+                throw new InvalidOperationException("The response content could not be deserialized into a PaymentInfo object.");
+            }
+
+            return paymentInfo;
         }
         catch (Exception ex)
         {
@@ -125,7 +152,14 @@ internal class PaymentService : IPaymentService
         {
             var response = await _httpClient.GetAsync($"/payments/outgoing/{paymentId}");
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<PaymentInfoOutgoing>();
+
+            var paymentInfoOutgoing = await response.Content.ReadFromJsonAsync<PaymentInfoOutgoing>();
+            if (paymentInfoOutgoing == null)
+            {
+                throw new InvalidOperationException("The response content could not be deserialized into a PaymentInfoOutgoing object.");
+            }
+
+            return paymentInfoOutgoing;
         }
         catch (Exception ex)
         {

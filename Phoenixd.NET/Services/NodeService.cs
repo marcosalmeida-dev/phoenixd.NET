@@ -22,7 +22,12 @@ internal class NodeService : INodeService
         {
             var response = await _httpClient.GetAsync("/getinfo");
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<NodeInfo>();
+            var nodeInfo = await response.Content.ReadFromJsonAsync<NodeInfo>();
+            if (nodeInfo == null)
+            {
+                throw new InvalidOperationException("Response content is null.");
+            }
+            return nodeInfo;
         }
         catch (Exception ex)
         {
@@ -37,7 +42,12 @@ internal class NodeService : INodeService
         {
             var response = await _httpClient.GetAsync("/getbalance");
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<Balance>();
+            var balance = await response.Content.ReadFromJsonAsync<Balance>();
+            if (balance == null)
+            {
+                throw new InvalidOperationException("Response content is null.");
+            }
+            return balance;
         }
         catch (Exception ex)
         {
@@ -52,7 +62,12 @@ internal class NodeService : INodeService
         {
             var response = await _httpClient.GetAsync("/listchannels");
             response.EnsureSuccessStatusCode();
-            return await response.Content.ReadFromJsonAsync<List<Channel>>();
+            var channels = await response.Content.ReadFromJsonAsync<List<Channel>>();
+            if (channels == null)
+            {
+                throw new InvalidOperationException("Response content is null.");
+            }
+            return channels;
         }
         catch (Exception ex)
         {
