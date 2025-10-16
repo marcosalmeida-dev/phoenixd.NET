@@ -3,8 +3,7 @@ FROM --platform=$BUILDPLATFORM eclipse-temurin:21-jdk-jammy AS build
 
 # Set necessary args and environment variables for building phoenixd
 ARG TARGETPLATFORM
-ARG PHOENIXD_BRANCH=v0.6.0
-ARG PHOENIXD_COMMIT_HASH=fa318d9cd600aff45df132b7c01cbb959e66caa4
+ARG PHOENIXD_BRANCH=v0.6.3
 
 # Upgrade all packages and install dependencies
 RUN apt-get update \
@@ -15,8 +14,7 @@ RUN apt-get install -y --no-install-recommends bash git \
 # Git pull phoenixd source at specified tag/branch and compile phoenixd
 WORKDIR /phoenixd
 RUN git clone --recursive --single-branch --branch ${PHOENIXD_BRANCH} -c advice.detachedHead=false \
-    https://github.com/ACINQ/phoenixd . \
-    && test `git rev-parse HEAD` = ${PHOENIXD_COMMIT_HASH} || exit 1
+    https://github.com/ACINQ/phoenixd .
 
 RUN case "${TARGETPLATFORM}" in \
         "linux/amd64") ./gradlew linkPhoenixdReleaseExecutableLinuxX64 linkPhoenix-cliReleaseExecutableLinuxX64 ;; \
