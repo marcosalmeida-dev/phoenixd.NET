@@ -1,123 +1,217 @@
-﻿using Moq;
-using Phoenixd.NET.Interfaces;
+using Microsoft.Extensions.Logging.Abstractions;
 using Phoenixd.NET.Models;
+using Phoenixd.NET.Services;
+using Phoenixd.NET.Tests.Helpers;
 
 namespace Phoenixd.NET.Tests.Service.Tests;
 
 public class PaymentServiceTests
 {
-    private readonly Mock<IPaymentService> _mockPaymentService;
+    private static PaymentService CreateService(StubHttpMessageHandler handler) =>
+        new(handler.CreateClient(), NullLogger<PaymentService>.Instance);
 
-    public PaymentServiceTests()
+    [Fact]
+    public async Task ReceiveLightningPaymentAsync_PostsFieldsAndParsesInvoice()
     {
-        _mockPaymentService = new Mock<IPaymentService>();
+        const string json = """{ "amountSat": 1000, "paymentHash": "hash123", "serialized": "lnbc..." }""";
+        var handler = new StubHttpMessageHandler(json);
+        var service = CreateService(handler);
+
+        var result = await service.ReceiveLightningPaymentAsync("Test payment", 1000, "conn-1");
+
+        Assert.Equal("/createinvoice", handler.LastPath);
+        Assert.Contains("amountSat=1000", handler.LastRequestBody);
+        Assert.Contains("description=Test+payment", handler.LastRequestBody);
+        Assert.Contains("externalId=conn-1", handler.LastRequestBody);
+        Assert.Equal(1000, result.AmountSat);
+        Assert.Equal("hash123", result.PaymentHash);
+        Assert.Equal("lnbc...", result.Serialized);
     }
 
     [Fact]
-    public async Task ReceiveLightningPaymentAsync_ShouldReturnInvoice_WhenApiCallIsSuccessful()
+    public async Task ReceiveLightningPaymentAsync_WithDescriptionHash_OmitsDescription()
     {
-        // Arrange
-        var expectedInvoice = new Invoice { AmountSat = 1000, PaymentHash = "hash123" };
-        _mockPaymentService
-            .Setup(service => service.ReceiveLightningPaymentAsync(It.IsAny<string>(), It.IsAny<long>(), It.IsAny<string>()))
-            .ReturnsAsync(expectedInvoice);
+        var handler = new StubHttpMessageHandler("""{ "paymentHash": "h", "serialized": "lnbc" }""");
+        var service = CreateService(handler);
 
-        // Act
-        var result = await _mockPaymentService.Object.ReceiveLightningPaymentAsync("Test payment", 1000);
+        await service.ReceiveLightningPaymentAsync("ignored", 500, descriptionHash: "deadbeef");
 
-        // Assert
-        Assert.NotNull(result);
-        Assert.Equal(expectedInvoice.AmountSat, result.AmountSat);
-        Assert.Equal(expectedInvoice.PaymentHash, result.PaymentHash);
+        Assert.Contains("descriptionHash=deadbeef", handler.LastRequestBody);
+        Assert.DoesNotContain("description=ignored", handler.LastRequestBody);
     }
 
     [Fact]
-    public async Task SendLightningInvoice_ShouldReturnPayInvoiceResponse_WhenApiCallIsSuccessful()
+    public async Task SendLightningInvoice_ParsesPayInvoiceResponse()
     {
-        // Arrange
-        var expectedResponse = new PayInvoiceResponse { RecipientAmountSat = 1000, PaymentHash = "hash123" };
-        _mockPaymentService
-            .Setup(service => service.SendLightningInvoice(It.IsAny<long>(), It.IsAny<string>()))
-            .ReturnsAsync(expectedResponse);
+        const string json = """
+            { "recipientAmountSat": 1000, "routingFeeSat": 2, "paymentId": "id", "paymentHash": "hash123", "paymentPreimage": "preimg" }
+            """;
+        var handler = new StubHttpMessageHandler(json);
+        var service = CreateService(handler);
 
-        // Act
-        var result = await _mockPaymentService.Object.SendLightningInvoice(1000, "invoice123");
+        var result = await service.SendLightningInvoice(1000, "lnbc1invoice");
 
-        // Assert
-        Assert.NotNull(result);
-        Assert.Equal(expectedResponse.RecipientAmountSat, result.RecipientAmountSat);
-        Assert.Equal(expectedResponse.PaymentHash, result.PaymentHash);
+        Assert.Equal("/payinvoice", handler.LastPath);
+        Assert.Contains("invoice=lnbc1invoice", handler.LastRequestBody);
+        Assert.Equal(1000, result.RecipientAmountSat);
+        Assert.Equal("hash123", result.PaymentHash);
+        Assert.Equal("id", result.PaymentId);
     }
 
     [Fact]
-    public async Task SendOnchainPayment_ShouldReturnTransactionId_WhenApiCallIsSuccessful()
+    public async Task PayOfferAsync_PostsOfferAndMessage()
     {
-        // Arrange
-        var expectedResponse = "tx123";
-        _mockPaymentService
-            .Setup(service => service.SendOnchainPayment(It.IsAny<long>(), It.IsAny<string>(), It.IsAny<int>()))
-            .ReturnsAsync(expectedResponse);
+        const string json = """{ "recipientAmountSat": 100, "routingFeeSat": 0, "paymentId": "id", "paymentHash": "h", "paymentPreimage": "p" }""";
+        var handler = new StubHttpMessageHandler(json);
+        var service = CreateService(handler);
 
-        // Act
-        var result = await _mockPaymentService.Object.SendOnchainPayment(1000, "address123", 10);
+        await service.PayOfferAsync("lno1offer", 100, "thanks");
 
-        // Assert
-        Assert.NotNull(result);
-        Assert.Equal(expectedResponse, result);
+        Assert.Equal("/payoffer", handler.LastPath);
+        Assert.Contains("offer=lno1offer", handler.LastRequestBody);
+        Assert.Contains("amountSat=100", handler.LastRequestBody);
+        Assert.Contains("message=thanks", handler.LastRequestBody);
     }
 
     [Fact]
-    public async Task ListIncomingPayments_ShouldReturnPaymentsList_WhenApiCallIsSuccessful()
+    public async Task PayLnAddressAsync_PostsAddressAndAmount()
     {
-        // Arrange
-        var expectedPayments = new List<PaymentInfo>
-        {
-            new PaymentInfo { PaymentHash = "hash123", ReceivedSat = 1000 }
-        };
-        _mockPaymentService
-            .Setup(service => service.ListIncomingPayments(It.IsAny<string>()))
-            .ReturnsAsync(expectedPayments);
+        const string json = """{ "recipientAmountSat": 100, "routingFeeSat": 0, "paymentId": "id", "paymentHash": "h", "paymentPreimage": "p" }""";
+        var handler = new StubHttpMessageHandler(json);
+        var service = CreateService(handler);
 
-        // Act
-        var result = await _mockPaymentService.Object.ListIncomingPayments("externalId123");
+        await service.PayLnAddressAsync("user@example.com", 100);
 
-        // Assert
-        Assert.NotNull(result);
+        Assert.Equal("/paylnaddress", handler.LastPath);
+        Assert.Contains("address=user%40example.com", handler.LastRequestBody);
+        Assert.Contains("amountSat=100", handler.LastRequestBody);
+    }
+
+    [Fact]
+    public async Task SendOnchainPayment_ReturnsTxId()
+    {
+        var handler = new StubHttpMessageHandler("onchaintxid", mediaType: "text/plain");
+        var service = CreateService(handler);
+
+        var result = await service.SendOnchainPayment(1000, "bcrt1qaddr", 5);
+
+        Assert.Equal("/sendtoaddress", handler.LastPath);
+        Assert.Contains("feerateSatByte=5", handler.LastRequestBody);
+        Assert.Equal("onchaintxid", result);
+    }
+
+    [Fact]
+    public async Task CreateOfferAsync_ReturnsSerializedOffer()
+    {
+        var handler = new StubHttpMessageHandler("lno1qcp4256ypqpq", mediaType: "text/plain");
+        var service = CreateService(handler);
+
+        var result = await service.CreateOfferAsync(description: "tips");
+
+        Assert.Equal("/createoffer", handler.LastPath);
+        Assert.Equal("lno1qcp4256ypqpq", result);
+    }
+
+    [Fact]
+    public async Task GetLnAddressAsync_ReturnsAddress()
+    {
+        var handler = new StubHttpMessageHandler("user@phoenix.example", mediaType: "text/plain");
+        var service = CreateService(handler);
+
+        var result = await service.GetLnAddressAsync();
+
+        Assert.Equal("/getlnaddress", handler.LastPath);
+        Assert.Equal("user@phoenix.example", result);
+    }
+
+    [Fact]
+    public async Task DecodeInvoiceAsync_ReturnsJsonElement()
+    {
+        const string json = """{ "amount": 1000, "paymentHash": "abc", "description": "coffee" }""";
+        var handler = new StubHttpMessageHandler(json);
+        var service = CreateService(handler);
+
+        var result = await service.DecodeInvoiceAsync("lnbc1invoice");
+
+        Assert.Equal("/decodeinvoice", handler.LastPath);
+        Assert.Equal("coffee", result.GetProperty("description").GetString());
+    }
+
+    [Fact]
+    public async Task ListIncomingPayments_ByExternalId_SetsQuery()
+    {
+        var handler = new StubHttpMessageHandler("[]");
+        var service = CreateService(handler);
+
+        var result = await service.ListIncomingPayments("conn-1");
+
+        Assert.Equal("/payments/incoming", handler.LastPath);
+        Assert.Contains("externalId=conn-1", handler.LastQuery);
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task ListIncomingPayments_WithQuery_BuildsPagination()
+    {
+        const string json = """
+            [ { "paymentHash": "hash123", "receivedSat": 1000, "fees": 1500, "isPaid": true, "createdAt": 1 } ]
+            """;
+        var handler = new StubHttpMessageHandler(json);
+        var service = CreateService(handler);
+
+        var query = new PaymentsQuery { Limit = 10, Offset = 20, All = true, From = 100, To = 200 };
+        var result = await service.ListIncomingPayments(query);
+
+        Assert.Contains("limit=10", handler.LastQuery);
+        Assert.Contains("offset=20", handler.LastQuery);
+        Assert.Contains("all=true", handler.LastQuery);
+        Assert.Contains("from=100", handler.LastQuery);
+        Assert.Contains("to=200", handler.LastQuery);
         Assert.Single(result);
-        Assert.Equal(expectedPayments[0].PaymentHash, result[0].PaymentHash);
+        Assert.Equal(1500, result[0].Fees); // millisatoshis
     }
 
     [Fact]
-    public async Task GetIncomingPayment_ShouldReturnPaymentInfo_WhenApiCallIsSuccessful()
+    public async Task GetIncomingPayment_UsesPaymentHashInPath()
     {
-        // Arrange
-        var expectedPaymentInfo = new PaymentInfo { PaymentHash = "hash123", ReceivedSat = 1000 };
-        _mockPaymentService
-            .Setup(service => service.GetIncomingPayment(It.IsAny<string>()))
-            .ReturnsAsync(expectedPaymentInfo);
+        const string json = """{ "paymentHash": "hash123", "receivedSat": 1000, "isPaid": true, "createdAt": 1 }""";
+        var handler = new StubHttpMessageHandler(json);
+        var service = CreateService(handler);
 
-        // Act
-        var result = await _mockPaymentService.Object.GetIncomingPayment("hash123");
+        var result = await service.GetIncomingPayment("hash123");
 
-        // Assert
-        Assert.NotNull(result);
-        Assert.Equal(expectedPaymentInfo.PaymentHash, result.PaymentHash);
+        Assert.Equal("/payments/incoming/hash123", handler.LastPath);
+        Assert.Equal("hash123", result.PaymentHash);
     }
 
     [Fact]
-    public async Task GetOutgoingPayment_ShouldReturnPaymentInfoOutgoing_WhenApiCallIsSuccessful()
+    public async Task GetOutgoingPaymentByHash_UsesCorrectPath()
     {
-        // Arrange
-        var expectedPaymentInfoOutgoing = new PaymentInfoOutgoing { PaymentHash = "hash123", Sent = 1000 };
-        _mockPaymentService
-            .Setup(service => service.GetOutgoingPayment(It.IsAny<string>()))
-            .ReturnsAsync(expectedPaymentInfoOutgoing);
+        const string json = """{ "paymentId": "uuid-1", "paymentHash": "hash123", "sent": 1000, "fees": 0, "isPaid": true, "createdAt": 1 }""";
+        var handler = new StubHttpMessageHandler(json);
+        var service = CreateService(handler);
 
-        // Act
-        var result = await _mockPaymentService.Object.GetOutgoingPayment("payment123");
+        var result = await service.GetOutgoingPaymentByHash("hash123");
 
-        // Assert
-        Assert.NotNull(result);
-        Assert.Equal(expectedPaymentInfoOutgoing.PaymentHash, result.PaymentHash);
+        Assert.Equal("/payments/outgoingbyhash/hash123", handler.LastPath);
+        Assert.Equal("uuid-1", result.PaymentId);
+        Assert.Equal("hash123", result.PaymentHash);
+    }
+
+    [Fact]
+    public async Task ListOutgoingPayments_ParsesList()
+    {
+        const string json = """
+            [ { "paymentId": "uuid-1", "sent": 5000, "fees": 100, "isPaid": true, "createdAt": 1, "subType": "lightning" } ]
+            """;
+        var handler = new StubHttpMessageHandler(json);
+        var service = CreateService(handler);
+
+        var result = await service.ListOutgoingPayments(new PaymentsQuery { Limit = 5 });
+
+        Assert.Equal("/payments/outgoing", handler.LastPath);
+        Assert.Contains("limit=5", handler.LastQuery);
+        Assert.Single(result);
+        Assert.Equal("lightning", result[0].SubType);
     }
 }

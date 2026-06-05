@@ -1,109 +1,51 @@
-﻿using System.Net.Http.Json;
 using Microsoft.Extensions.Logging;
 using Phoenixd.NET.Interfaces;
 using Phoenixd.NET.Models;
 
 namespace Phoenixd.NET.Services;
 
-internal class NodeService : INodeService
+internal sealed class NodeService : PhoenixdServiceBase, INodeService
 {
-    private readonly HttpClient _httpClient;
-    private readonly ILogger<NodeService> _logger;
-
     public NodeService(HttpClient httpClient, ILogger<NodeService> logger)
+        : base(httpClient, logger)
     {
-        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-        _logger = logger;
     }
 
-    public async Task<NodeInfo> GetNodeInfo()
+    public Task<NodeInfo> GetNodeInfo(CancellationToken cancellationToken = default) =>
+        GetJsonAsync<NodeInfo>("/getinfo", nameof(GetNodeInfo), cancellationToken);
+
+    public Task<Balance> GetBalance(CancellationToken cancellationToken = default) =>
+        GetJsonAsync<Balance>("/getbalance", nameof(GetBalance), cancellationToken);
+
+    public Task<List<Channel>> ListChannels(CancellationToken cancellationToken = default) =>
+        GetJsonAsync<List<Channel>>("/listchannels", nameof(ListChannels), cancellationToken);
+
+    public Task<LiquidityFees> EstimateLiquidityFees(long amountSat, CancellationToken cancellationToken = default) =>
+        GetJsonAsync<LiquidityFees>(
+            $"/estimateliquidityfees?amountSat={amountSat}",
+            nameof(EstimateLiquidityFees),
+            cancellationToken);
+
+    public async Task<CloseChannelResponse> CloseChannel(string channelId, string address, int feerateSatByte, CancellationToken cancellationToken = default)
     {
-        try
-        {
-            var response = await _httpClient.GetAsync("/getinfo");
-            response.EnsureSuccessStatusCode();
-            var nodeInfo = await response.Content.ReadFromJsonAsync<NodeInfo>();
-            if (nodeInfo == null)
-            {
-                throw new InvalidOperationException("Response content is null.");
-            }
-            return nodeInfo;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting node info");
-            throw;
-        }
+        var content = Form(
+            ("channelId", channelId),
+            ("address", address),
+            ("feerateSatByte", feerateSatByte.ToString()));
+
+        var body = await PostStringAsync("/closechannel", content, nameof(CloseChannel), cancellationToken)
+            .ConfigureAwait(false);
+
+        // phoenixd replies with the closing txid (or "ok"); anything else is treated as an error.
+        return string.IsNullOrWhiteSpace(body)
+            ? new CloseChannelResponse { Status = "error", Message = "Empty response" }
+            : new CloseChannelResponse { Status = "ok", Message = body };
     }
 
-    public async Task<Balance> GetBalance()
-    {
-        try
-        {
-            var response = await _httpClient.GetAsync("/getbalance");
-            response.EnsureSuccessStatusCode();
-            var balance = await response.Content.ReadFromJsonAsync<Balance>();
-            if (balance == null)
-            {
-                throw new InvalidOperationException("Response content is null.");
-            }
-            return balance;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting balance");
-            throw;
-        }
-    }
-
-    public async Task<List<Channel>> ListChannels()
-    {
-        try
-        {
-            var response = await _httpClient.GetAsync("/listchannels");
-            response.EnsureSuccessStatusCode();
-            var channels = await response.Content.ReadFromJsonAsync<List<Channel>>();
-            if (channels == null)
-            {
-                throw new InvalidOperationException("Response content is null.");
-            }
-            return channels;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error listing channels");
-            throw;
-        }
-    }
-
-    public async Task<CloseChannelResponse> CloseChannel(string channelId, string address, int feerateSatByte)
-    {
-        var data = new Dictionary<string, string>
-        {
-            { "channelId", channelId },
-            { "address", address },
-            { "feerateSatByte", feerateSatByte.ToString() }
-        };
-
-        try
-        {
-            var response = await _httpClient.PostAsync("/closechannel", new FormUrlEncodedContent(data));
-            response.EnsureSuccessStatusCode();
-            var content = await response.Content.ReadAsStringAsync();
-            if (content == "ok")
-            {
-                return new CloseChannelResponse { Status = "ok" };
-            }
-            else
-            {
-                _logger.LogError("Unexpected response: {0}", content);
-                return new CloseChannelResponse { Status = "error", Message = "Unexpected response" };
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error closing channel");
-            throw;
-        }
-    }
+    public Task<string> BumpFee(int feerateSatByte, CancellationToken cancellationToken = default) =>
+        PostStringAsync(
+            "/bumpfee",
+            Form(("feerateSatByte", feerateSatByte.ToString())),
+            nameof(BumpFee),
+            cancellationToken);
 }

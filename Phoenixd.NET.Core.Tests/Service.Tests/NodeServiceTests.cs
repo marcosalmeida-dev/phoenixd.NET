@@ -1,117 +1,121 @@
-﻿using Moq;
-using Phoenixd.NET.Interfaces;
-using Phoenixd.NET.Models;
+using System.Net;
+using Microsoft.Extensions.Logging.Abstractions;
+using Phoenixd.NET.Exceptions;
+using Phoenixd.NET.Services;
+using Phoenixd.NET.Tests.Helpers;
 
 namespace Phoenixd.NET.Tests.Service.Tests;
 
 public class NodeServiceTests
 {
-    private readonly Mock<INodeService> _mockNodeService;
+    private static NodeService CreateService(StubHttpMessageHandler handler) =>
+        new(handler.CreateClient(), NullLogger<NodeService>.Instance);
 
-    public NodeServiceTests()
+    [Fact]
+    public async Task GetNodeInfo_ParsesResponse()
     {
-        _mockNodeService = new Mock<INodeService>();
+        const string json = """
+            {
+              "nodeId": "node123",
+              "channels": [],
+              "chain": "testnet",
+              "blockHeight": 42,
+              "version": "0.8.0"
+            }
+            """;
+        var handler = new StubHttpMessageHandler(json);
+        var service = CreateService(handler);
+
+        var result = await service.GetNodeInfo();
+
+        Assert.Equal("/getinfo", handler.LastPath);
+        Assert.Equal("node123", result.NodeId);
+        Assert.Equal("testnet", result.Chain);
+        Assert.Equal(42, result.BlockHeight);
+        Assert.Equal("0.8.0", result.Version);
     }
 
     [Fact]
-    public async Task GetNodeInfo_ShouldReturnNodeInfo_WhenApiCallIsSuccessful()
+    public async Task GetBalance_ParsesResponse()
     {
-        // Arrange
-        var expectedNodeInfo = new NodeInfo { NodeId = "node123", Chain = "testchain", Version = "1.0.0" };
-        _mockNodeService
-            .Setup(service => service.GetNodeInfo())
-            .ReturnsAsync(expectedNodeInfo);
+        var handler = new StubHttpMessageHandler("""{ "balanceSat": 1000, "feeCreditSat": 50 }""");
+        var service = CreateService(handler);
 
-        // Act
-        var result = await _mockNodeService.Object.GetNodeInfo();
+        var result = await service.GetBalance();
 
-        // Assert
-        Assert.NotNull(result);
-        Assert.Equal(expectedNodeInfo.NodeId, result.NodeId);
-        Assert.Equal(expectedNodeInfo.Chain, result.Chain);
-        Assert.Equal(expectedNodeInfo.Version, result.Version);
+        Assert.Equal("/getbalance", handler.LastPath);
+        Assert.Equal(1000, result.BalanceSat);
+        Assert.Equal(50, result.FeeCreditSat);
     }
 
     [Fact]
-    public async Task GetBalance_ShouldReturnBalance_WhenApiCallIsSuccessful()
+    public async Task ListChannels_ParsesResponse()
     {
-        // Arrange
-        var expectedBalance = new Balance { BalanceSat = 1000, FeeCreditSat = 50 };
-        _mockNodeService
-            .Setup(service => service.GetBalance())
-            .ReturnsAsync(expectedBalance);
+        const string json = """
+            [ { "state": "Normal", "channelId": "channel123", "balanceSat": 500, "inboundLiquiditySat": 100, "capacitySat": 600, "fundingTxId": "tx" } ]
+            """;
+        var handler = new StubHttpMessageHandler(json);
+        var service = CreateService(handler);
 
-        // Act
-        var result = await _mockNodeService.Object.GetBalance();
+        var result = await service.ListChannels();
 
-        // Assert
-        Assert.NotNull(result);
-        Assert.Equal(expectedBalance.BalanceSat, result.BalanceSat);
-        Assert.Equal(expectedBalance.FeeCreditSat, result.FeeCreditSat);
-    }
-
-    [Fact]
-    public async Task ListChannels_ShouldReturnChannels_WhenApiCallIsSuccessful()
-    {
-        // Arrange
-        var expectedChannels = new List<Channel>
-        {
-            new Channel { ChannelId = "channel123", State = "open", BalanceSat = 500 }
-        };
-        _mockNodeService
-            .Setup(service => service.ListChannels())
-            .ReturnsAsync(expectedChannels);
-
-        // Act
-        var result = await _mockNodeService.Object.ListChannels();
-
-        // Assert
-        Assert.NotNull(result);
+        Assert.Equal("/listchannels", handler.LastPath);
         Assert.Single(result);
-        Assert.Equal(expectedChannels[0].ChannelId, result[0].ChannelId);
-        Assert.Equal(expectedChannels[0].State, result[0].State);
+        Assert.Equal("channel123", result[0].ChannelId);
+        Assert.Equal("Normal", result[0].State);
     }
 
     [Fact]
-    public async Task CloseChannel_ShouldReturnCloseChannelResponse_WhenApiCallIsSuccessful()
+    public async Task EstimateLiquidityFees_SendsAmountAndParsesResponse()
     {
-        // Arrange
-        var channelId = "channel123";
-        var address = "address123";
-        var feerateSatByte = 10;
-        var expectedResponse = new CloseChannelResponse { Status = "ok" };
+        var handler = new StubHttpMessageHandler("""{ "miningFeeSat": 120, "serviceFeeSat": 300 }""");
+        var service = CreateService(handler);
 
-        _mockNodeService
-            .Setup(service => service.CloseChannel(channelId, address, feerateSatByte))
-            .ReturnsAsync(expectedResponse);
+        var result = await service.EstimateLiquidityFees(100000);
 
-        // Act
-        var result = await _mockNodeService.Object.CloseChannel(channelId, address, feerateSatByte);
+        Assert.Equal("/estimateliquidityfees", handler.LastPath);
+        Assert.Contains("amountSat=100000", handler.LastQuery);
+        Assert.Equal(120, result.MiningFeeSat);
+        Assert.Equal(300, result.ServiceFeeSat);
+    }
 
-        // Assert
-        Assert.NotNull(result);
+    [Fact]
+    public async Task CloseChannel_ReturnsOkWithTxId()
+    {
+        var handler = new StubHttpMessageHandler("abc123txid", mediaType: "text/plain");
+        var service = CreateService(handler);
+
+        var result = await service.CloseChannel("channel123", "bcrt1qaddress", 10);
+
+        Assert.Equal("/closechannel", handler.LastPath);
+        Assert.Contains("channelId=channel123", handler.LastRequestBody);
+        Assert.Contains("feerateSatByte=10", handler.LastRequestBody);
         Assert.Equal("ok", result.Status);
+        Assert.Equal("abc123txid", result.Message);
     }
 
     [Fact]
-    public async Task CloseChannel_ShouldReturnErrorResponse_WhenUnexpectedResponseReceived()
+    public async Task BumpFee_PostsFeerateAndReturnsTxId()
     {
-        // Arrange
-        var channelId = "channel123";
-        var address = "address123";
-        var feerateSatByte = 10;
-        var expectedResponse = new CloseChannelResponse { Status = "error", Message = "Unexpected response" };
+        var handler = new StubHttpMessageHandler("txid999", mediaType: "text/plain");
+        var service = CreateService(handler);
 
-        _mockNodeService
-            .Setup(service => service.CloseChannel(channelId, address, feerateSatByte))
-            .ReturnsAsync(expectedResponse);
+        var result = await service.BumpFee(15);
 
-        // Act
-        var result = await _mockNodeService.Object.CloseChannel(channelId, address, feerateSatByte);
+        Assert.Equal("/bumpfee", handler.LastPath);
+        Assert.Contains("feerateSatByte=15", handler.LastRequestBody);
+        Assert.Equal("txid999", result);
+    }
 
-        // Assert
-        Assert.NotNull(result);
-        Assert.Equal("error", result.Status);
-        Assert.Equal("Unexpected response", result.Message);
+    [Fact]
+    public async Task GetNodeInfo_OnErrorStatus_ThrowsPhoenixdApiException()
+    {
+        var handler = new StubHttpMessageHandler("unauthorized", HttpStatusCode.Unauthorized, "text/plain");
+        var service = CreateService(handler);
+
+        var ex = await Assert.ThrowsAsync<PhoenixdApiException>(() => service.GetNodeInfo());
+
+        Assert.Equal(401, ex.StatusCode);
+        Assert.Equal("unauthorized", ex.ResponseBody);
     }
 }

@@ -1,4 +1,3 @@
-﻿using System.Text.Json;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using Phoenixd.NET.Hubs;
@@ -6,53 +5,74 @@ using Phoenixd.NET.Interfaces;
 using Phoenixd.NET.Models;
 using Phoenixd.NET.WebService.Client;
 
-namespace Phoenixd.NET.Services
+namespace Phoenixd.NET.Services;
+
+/// <summary>
+/// Coordinates the phoenixd services and bridges incoming <c>payment_received</c> websocket events
+/// to SignalR clients. The convention is that callers pass their SignalR connection id as the
+/// invoice <c>externalId</c>; this service then forwards the event to that specific client.
+/// </summary>
+public class PhoenixdManagerService
 {
-    public class PhoenixdManagerService
+    private readonly PhoenixdClient _phoenixdClient;
+    private readonly IHubContext<PaymentHub> _hubContext;
+    private readonly ILogger<PhoenixdManagerService> _logger;
+
+    public INodeService NodeService { get; }
+    public IPaymentService PaymentService { get; }
+
+    /// <summary>Raised for every incoming payment, for consumers that don't use SignalR.</summary>
+    public event Action<PaymentReceived>? PaymentReceived;
+
+    public PhoenixdManagerService(
+        PhoenixdClient phoenixdClient,
+        IHubContext<PaymentHub> hubContext,
+        INodeService nodeService,
+        IPaymentService paymentService,
+        ILogger<PhoenixdManagerService> logger)
     {
-        private readonly HttpClient _httpClient;
-        private readonly PhoenixdClient _phoenixdClient;
-        private readonly IHubContext<PaymentHub> _hubContext;
-        private readonly ILogger<PhoenixdManagerService> _logger;
+        _phoenixdClient = phoenixdClient ?? throw new ArgumentNullException(nameof(phoenixdClient));
+        _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-        public readonly INodeService NodeService;
-        public readonly IPaymentService PaymentService;
+        NodeService = nodeService ?? throw new ArgumentNullException(nameof(nodeService));
+        PaymentService = paymentService ?? throw new ArgumentNullException(nameof(paymentService));
 
-        public PhoenixdManagerService(
-            HttpClient httpClient,
-            PhoenixdClient phoenixdClient,
-            IHubContext<PaymentHub> hubContext,
-            INodeService nodeService,
-            IPaymentService paymentService,
-            ILogger<PhoenixdManagerService> logger)
+        _phoenixdClient.OnPaymentReceived += HandlePaymentReceived;
+    }
+
+    private void HandlePaymentReceived(PaymentReceived paymentReceived)
+    {
+        try
         {
-            _httpClient = httpClient;
-            _phoenixdClient = phoenixdClient;
-            _hubContext = hubContext;
-            _logger = logger;
-
-            NodeService = nodeService;
-            PaymentService = paymentService;
-
-            _phoenixdClient.OnMessageReceived += OnMessageReceived;
+            PaymentReceived?.Invoke(paymentReceived);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "A PaymentReceived handler threw.");
         }
 
-        private async void OnMessageReceived(string message)
-        {
-            var paymentReceived = JsonSerializer.Deserialize<PaymentReceived>(message);
+        // Fire-and-forget the SignalR notification; avoid async void so failures are observed/logged.
+        _ = NotifyClientAsync(paymentReceived);
+    }
 
-            if (!string.IsNullOrEmpty(paymentReceived?.ExternalId))
-            {
-                try
-                {
-                    await _hubContext.Clients.Client(paymentReceived.ExternalId).SendAsync("ReceivePayment", paymentReceived);
-                    _logger.LogInformation($"Message sent to client with ConnectionId: {paymentReceived.ExternalId}");
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, $"Error sending message to client {paymentReceived.ExternalId}");
-                }
-            }
+    private async Task NotifyClientAsync(PaymentReceived paymentReceived)
+    {
+        var connectionId = paymentReceived.ExternalId;
+        if (string.IsNullOrEmpty(connectionId))
+        {
+            return;
+        }
+
+        try
+        {
+            await _hubContext.Clients.Client(connectionId).SendAsync("ReceivePayment", paymentReceived);
+            _logger.LogInformation("Forwarded payment {PaymentHash} to SignalR client {ConnectionId}.",
+                paymentReceived.PaymentHash, connectionId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending payment notification to SignalR client {ConnectionId}.", connectionId);
         }
     }
 }

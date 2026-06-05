@@ -1,122 +1,178 @@
-﻿using Microsoft.Extensions.Logging;
-using Phoenixd.NET.Models;
 using System.Net.WebSockets;
 using System.Text;
+using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using Phoenixd.NET.Json;
+using Phoenixd.NET.Models;
 
 namespace Phoenixd.NET.WebService.Client;
 
-public class PhoenixdClient
+/// <summary>
+/// Maintains a resilient websocket connection to phoenixd's <c>/websocket</c> endpoint and surfaces
+/// the <c>payment_received</c> events it pushes. The connection is re-established automatically with
+/// exponential backoff until the supplied <see cref="CancellationToken"/> is cancelled.
+/// </summary>
+public sealed class PhoenixdClient
 {
+    private const int MaxBackoffSeconds = 60;
+
     private readonly PhoenixConfig _phoenixConfig;
     private readonly ILogger<PhoenixdClient> _logger;
-    private ClientWebSocket _webSocket;
-    private const int ReconnectDelayInSeconds = 5; // Time to wait before reconnecting
+    private readonly Uri _websocketUri;
+    private readonly string _authorizationHeader;
 
-    public event Action<string> OnMessageReceived;
+    /// <summary>Raised with the raw JSON for every message received on the websocket.</summary>
+    public event Action<string>? OnMessageReceived;
+
+    /// <summary>Raised with the parsed <c>payment_received</c> event for incoming payments.</summary>
+    public event Action<PaymentReceived>? OnPaymentReceived;
 
     public PhoenixdClient(PhoenixConfig phoenixConfig, ILogger<PhoenixdClient> logger)
     {
-        _phoenixConfig = phoenixConfig;
-        _logger = logger;
+        _phoenixConfig = phoenixConfig ?? throw new ArgumentNullException(nameof(phoenixConfig));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _websocketUri = BuildWebsocketUri(phoenixConfig.Host);
+        _authorizationHeader = "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes($":{phoenixConfig.Token}"));
     }
 
-    private void InitializeWebSocket()
+    /// <summary>
+    /// Connects and processes messages until <paramref name="cancellationToken"/> is cancelled,
+    /// reconnecting with exponential backoff on any failure. Intended to be driven by a hosted
+    /// background service.
+    /// </summary>
+    public async Task RunAsync(CancellationToken cancellationToken)
     {
-        if (_webSocket != null)
-        {
-            _logger.LogInformation("Disposing of the previous WebSocket instance.");
-            _webSocket.Dispose();
-        }
-        _webSocket = new ClientWebSocket();
-        var tokenBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes($":{_phoenixConfig.Token}"));
-        _webSocket.Options.SetRequestHeader("Authorization", $"Basic {tokenBase64}");
-    }
+        var attempt = 0;
 
-    internal async Task ConnectWebSocketAsync()
-    {
-        var wsHost = _phoenixConfig.Host.Replace("http://", "").Replace("https://", "");
-        var uri = new Uri($"ws://{wsHost}/websocket");
-
-        while (true) // Keep attempting to connect
+        while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
-                InitializeWebSocket(); // Always start with a fresh WebSocket instance
+                using var webSocket = new ClientWebSocket();
+                webSocket.Options.SetRequestHeader("Authorization", _authorizationHeader);
 
-                _logger.LogInformation("Connecting to Phoenixd payments websocket...");
-                await _webSocket.ConnectAsync(uri, CancellationToken.None);
-                _logger.LogInformation("Connected to Phoenixd payments websocket!");
+                _logger.LogInformation("Connecting to phoenixd websocket at {Uri}...", _websocketUri);
+                await webSocket.ConnectAsync(_websocketUri, cancellationToken).ConfigureAwait(false);
+                _logger.LogInformation("Connected to phoenixd websocket.");
+                attempt = 0;
 
-                // Start receiving messages
-                _ = Task.Run(async () => await ReceiveMessagesAsync());
-
-                // Break out of loop if successfully connected
-                break;
+                await ReceiveLoopAsync(webSocket, cancellationToken).ConfigureAwait(false);
             }
-            catch (ObjectDisposedException)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                _logger.LogError("WebSocket object was disposed unexpectedly. Creating a new WebSocket instance and retrying...");
+                break;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Phoenixd WebSocket connection error! Host: {uri}. Retrying in {ReconnectDelayInSeconds} seconds...");
+                var delay = GetBackoffDelay(++attempt);
+                _logger.LogError(ex, "phoenixd websocket error; reconnecting in {Seconds}s (attempt {Attempt}).",
+                    delay.TotalSeconds, attempt);
+                try
+                {
+                    await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
             }
-
-            // Wait before retrying
-            await Task.Delay(TimeSpan.FromSeconds(ReconnectDelayInSeconds));
         }
+
+        _logger.LogInformation("phoenixd websocket listener stopped.");
     }
 
-    private async Task ReceiveMessagesAsync()
+    private async Task ReceiveLoopAsync(ClientWebSocket webSocket, CancellationToken cancellationToken)
     {
-        var buffer = new byte[4096];
-        while (_webSocket.State == WebSocketState.Open)
+        var buffer = new byte[8192];
+        using var messageStream = new MemoryStream();
+
+        while (webSocket.State == WebSocketState.Open && !cancellationToken.IsCancellationRequested)
         {
-            try
+            messageStream.SetLength(0);
+
+            WebSocketReceiveResult result;
+            do
             {
-                var result = await _webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+                result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), cancellationToken).ConfigureAwait(false);
 
                 if (result.MessageType == WebSocketMessageType.Close)
                 {
-                    _logger.LogInformation("WebSocket closed");
-                    await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, string.Empty, CancellationToken.None);
+                    _logger.LogInformation("phoenixd websocket closed by server ({Status}: {Description}).",
+                        result.CloseStatus, result.CloseStatusDescription);
+                    await webSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, null, cancellationToken)
+                        .ConfigureAwait(false);
+                    return;
                 }
-                else
-                {
-                    var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                    _logger.LogInformation("Received payment: {0}", message);
-                    OnMessageReceived?.Invoke(message);
-                }
+
+                messageStream.Write(buffer, 0, result.Count);
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error receiving Phoenixd WebSocket message! Reconnecting...");
-                await ReconnectAsync();
-            }
+            while (!result.EndOfMessage); // reassemble messages that span multiple frames
+
+            var message = Encoding.UTF8.GetString(messageStream.GetBuffer(), 0, (int)messageStream.Length);
+            Dispatch(message);
         }
     }
 
-    private async Task ReconnectAsync()
+    private void Dispatch(string message)
     {
-        _logger.LogInformation($"Reconnecting WebSocket in {ReconnectDelayInSeconds} seconds...");
-        await Task.Delay(TimeSpan.FromSeconds(ReconnectDelayInSeconds));
-        await ConnectWebSocketAsync(); // Retry connection after delay
-    }
+        _logger.LogDebug("phoenixd websocket message: {Message}", message);
 
-    internal async Task DisconnectWebSocketAsync()
-    {
-        if (_webSocket != null && _webSocket.State != WebSocketState.Closed)
+        if (OnMessageReceived is { } rawHandler)
         {
             try
             {
-                await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None);
-                _webSocket.Dispose();
-                _logger.LogInformation("Disconnected from Phoenixd payments websocket");
+                rawHandler(message);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error disconnecting from Phoenixd WebSocket");
+                _logger.LogError(ex, "An OnMessageReceived handler threw.");
             }
         }
+
+        if (OnPaymentReceived is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var paymentReceived = JsonSerializer.Deserialize<PaymentReceived>(message, PhoenixdJson.Default);
+            if (paymentReceived is not null &&
+                string.Equals(paymentReceived.Type, "payment_received", StringComparison.Ordinal))
+            {
+                OnPaymentReceived(paymentReceived);
+            }
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "Failed to parse phoenixd websocket message as a payment event.");
+        }
+    }
+
+    private static Uri BuildWebsocketUri(string host)
+    {
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            throw new ArgumentException("PhoenixConfig.Host must be set.", nameof(host));
+        }
+
+        var builder = new UriBuilder(host)
+        {
+            Path = "/websocket",
+            Query = string.Empty
+        };
+
+        builder.Scheme = string.Equals(builder.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)
+            ? "wss"
+            : "ws";
+
+        return builder.Uri;
+    }
+
+    private static TimeSpan GetBackoffDelay(int attempt)
+    {
+        // 2, 4, 8, 16, 32, 60, 60... seconds.
+        var seconds = Math.Min(MaxBackoffSeconds, Math.Pow(2, Math.Min(attempt, 6)));
+        return TimeSpan.FromSeconds(seconds);
     }
 }

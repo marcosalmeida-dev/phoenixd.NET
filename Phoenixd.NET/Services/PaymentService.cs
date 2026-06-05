@@ -1,170 +1,176 @@
-﻿using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Phoenixd.NET.Interfaces;
 using Phoenixd.NET.Models;
 
 namespace Phoenixd.NET.Services;
 
-internal class PaymentService : IPaymentService
+internal sealed class PaymentService : PhoenixdServiceBase, IPaymentService
 {
-    private readonly HttpClient _httpClient;
-    private readonly ILogger<PaymentService> _logger;
-
     public PaymentService(HttpClient httpClient, ILogger<PaymentService> logger)
+        : base(httpClient, logger)
     {
-        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-        _logger = logger;
     }
 
-    public async Task<Invoice> ReceiveLightningPaymentAsync(string description, long amountSat, string externalId = "")
+    // --- Receiving ---------------------------------------------------------------------------
+
+    public Task<Invoice> ReceiveLightningPaymentAsync(
+        string? description,
+        long amountSat,
+        string? externalId = null,
+        string? descriptionHash = null,
+        long? expirySeconds = null,
+        string? webhookUrl = null,
+        CancellationToken cancellationToken = default)
     {
-        var data = new Dictionary<string, string>
-        {
-            { "description", description },
-            { "amountSat", amountSat.ToString() }
-        };
+        var content = Form(
+            ("amountSat", amountSat.ToString()),
+            // phoenixd accepts either description or descriptionHash, not both.
+            ("description", string.IsNullOrEmpty(descriptionHash) ? description : null),
+            ("descriptionHash", descriptionHash),
+            ("externalId", string.IsNullOrEmpty(externalId) ? null : externalId),
+            ("expirySeconds", expirySeconds?.ToString()),
+            ("webhookUrl", webhookUrl));
 
-        if (!string.IsNullOrEmpty(externalId))
-        {
-            data.Add("externalId", externalId);
-        }
+        return PostJsonAsync<Invoice>("/createinvoice", content, nameof(ReceiveLightningPaymentAsync), cancellationToken);
+    }
 
-        try
-        {
-            var response = await _httpClient.PostAsync("/createinvoice", new FormUrlEncodedContent(data));
-            response.EnsureSuccessStatusCode();
-            _logger.LogInformation("Lightning payment created successfully.");
+    public Task<string> CreateOfferAsync(long? amountSat = null, string? description = null, CancellationToken cancellationToken = default) =>
+        PostStringAsync(
+            "/createoffer",
+            Form(("amountSat", amountSat?.ToString()), ("description", description)),
+            nameof(CreateOfferAsync),
+            cancellationToken);
 
-            var invoice = await response.Content.ReadFromJsonAsync<Invoice>();
-            if (invoice == null)
+    public Task<string> GetOfferAsync(CancellationToken cancellationToken = default) =>
+        GetStringAsync("/getoffer", nameof(GetOfferAsync), cancellationToken);
+
+    public Task<string> GetLnAddressAsync(CancellationToken cancellationToken = default) =>
+        GetStringAsync("/getlnaddress", nameof(GetLnAddressAsync), cancellationToken);
+
+    // --- Sending -----------------------------------------------------------------------------
+
+    public Task<PayInvoiceResponse> SendLightningInvoice(long amountSat, string invoice, CancellationToken cancellationToken = default)
+    {
+        var content = Form(
+            // amountSat is only sent for amountless invoices; 0 means "use the invoice amount".
+            ("amountSat", amountSat > 0 ? amountSat.ToString() : null),
+            ("invoice", invoice));
+
+        return PostJsonAsync<PayInvoiceResponse>("/payinvoice", content, nameof(SendLightningInvoice), cancellationToken);
+    }
+
+    public Task<PayInvoiceResponse> PayOfferAsync(string offer, long? amountSat = null, string? message = null, CancellationToken cancellationToken = default)
+    {
+        var content = Form(
+            ("offer", offer),
+            ("amountSat", amountSat?.ToString()),
+            ("message", message));
+
+        return PostJsonAsync<PayInvoiceResponse>("/payoffer", content, nameof(PayOfferAsync), cancellationToken);
+    }
+
+    public Task<PayInvoiceResponse> PayLnAddressAsync(string address, long amountSat, string? message = null, CancellationToken cancellationToken = default)
+    {
+        var content = Form(
+            ("address", address),
+            ("amountSat", amountSat.ToString()),
+            ("message", message));
+
+        return PostJsonAsync<PayInvoiceResponse>("/paylnaddress", content, nameof(PayLnAddressAsync), cancellationToken);
+    }
+
+    public Task<PayInvoiceResponse> LnurlPayAsync(string lnurl, long? amountSat = null, string? message = null, CancellationToken cancellationToken = default)
+    {
+        var content = Form(
+            ("lnurl", lnurl),
+            ("amountSat", amountSat?.ToString()),
+            ("message", message));
+
+        return PostJsonAsync<PayInvoiceResponse>("/lnurlpay", content, nameof(LnurlPayAsync), cancellationToken);
+    }
+
+    public Task<JsonElement> LnurlWithdrawAsync(string lnurl, CancellationToken cancellationToken = default) =>
+        PostJsonElementAsync("/lnurlwithdraw", Form(("lnurl", lnurl)), nameof(LnurlWithdrawAsync), cancellationToken);
+
+    public Task<JsonElement> LnurlAuthAsync(string lnurl, CancellationToken cancellationToken = default) =>
+        PostJsonElementAsync("/lnurlauth", Form(("lnurl", lnurl)), nameof(LnurlAuthAsync), cancellationToken);
+
+    public Task<string> SendOnchainPayment(long amountSat, string address, int feerateSatByte, CancellationToken cancellationToken = default)
+    {
+        var content = Form(
+            ("amountSat", amountSat.ToString()),
+            ("address", address),
+            ("feerateSatByte", feerateSatByte.ToString()));
+
+        return PostStringAsync("/sendtoaddress", content, nameof(SendOnchainPayment), cancellationToken);
+    }
+
+    // --- Decoding ----------------------------------------------------------------------------
+
+    public Task<JsonElement> DecodeInvoiceAsync(string invoice, CancellationToken cancellationToken = default) =>
+        PostJsonElementAsync("/decodeinvoice", Form(("invoice", invoice)), nameof(DecodeInvoiceAsync), cancellationToken);
+
+    public Task<JsonElement> DecodeOfferAsync(string offer, CancellationToken cancellationToken = default) =>
+        PostJsonElementAsync("/decodeoffer", Form(("offer", offer)), nameof(DecodeOfferAsync), cancellationToken);
+
+    // --- History -----------------------------------------------------------------------------
+
+    public Task<List<PaymentInfo>> ListIncomingPayments(string externalId, CancellationToken cancellationToken = default) =>
+        ListIncomingPayments(new PaymentsQuery { ExternalId = externalId }, cancellationToken);
+
+    public Task<List<PaymentInfo>> ListIncomingPayments(PaymentsQuery query, CancellationToken cancellationToken = default) =>
+        GetJsonAsync<List<PaymentInfo>>(
+            "/payments/incoming" + BuildQueryString(query, includeExternalId: true),
+            nameof(ListIncomingPayments),
+            cancellationToken);
+
+    public Task<PaymentInfo> GetIncomingPayment(string paymentHash, CancellationToken cancellationToken = default) =>
+        GetJsonAsync<PaymentInfo>(
+            $"/payments/incoming/{Uri.EscapeDataString(paymentHash)}",
+            nameof(GetIncomingPayment),
+            cancellationToken);
+
+    public Task<List<PaymentInfoOutgoing>> ListOutgoingPayments(PaymentsQuery query, CancellationToken cancellationToken = default) =>
+        GetJsonAsync<List<PaymentInfoOutgoing>>(
+            "/payments/outgoing" + BuildQueryString(query, includeExternalId: false),
+            nameof(ListOutgoingPayments),
+            cancellationToken);
+
+    public Task<PaymentInfoOutgoing> GetOutgoingPayment(string paymentId, CancellationToken cancellationToken = default) =>
+        GetJsonAsync<PaymentInfoOutgoing>(
+            $"/payments/outgoing/{Uri.EscapeDataString(paymentId)}",
+            nameof(GetOutgoingPayment),
+            cancellationToken);
+
+    public Task<PaymentInfoOutgoing> GetOutgoingPaymentByHash(string paymentHash, CancellationToken cancellationToken = default) =>
+        GetJsonAsync<PaymentInfoOutgoing>(
+            $"/payments/outgoingbyhash/{Uri.EscapeDataString(paymentHash)}",
+            nameof(GetOutgoingPaymentByHash),
+            cancellationToken);
+
+    private static string BuildQueryString(PaymentsQuery query, bool includeExternalId)
+    {
+        var parameters = new List<string>();
+
+        void Add(string key, string? value)
+        {
+            if (!string.IsNullOrEmpty(value))
             {
-                throw new InvalidOperationException("The response content could not be deserialized into an Invoice object.");
+                parameters.Add($"{key}={Uri.EscapeDataString(value)}");
             }
-
-            return invoice;
         }
-        catch (Exception ex)
+
+        Add("from", query.From?.ToString());
+        Add("to", query.To?.ToString());
+        Add("limit", query.Limit?.ToString());
+        Add("offset", query.Offset?.ToString());
+        Add("all", query.All?.ToString().ToLowerInvariant());
+        if (includeExternalId)
         {
-            _logger.LogError(ex, "Error creating lightning payment");
-            throw;
+            Add("externalId", query.ExternalId);
         }
-    }
 
-    public async Task<PayInvoiceResponse> SendLightningInvoice(long amountSat, string invoice)
-    {
-        var data = new Dictionary<string, string>
-        {
-            { "amountSat", amountSat.ToString() },
-            { "invoice", invoice }
-        };
-
-        try
-        {
-            var response = await _httpClient.PostAsync("/payinvoice", new FormUrlEncodedContent(data));
-            response.EnsureSuccessStatusCode();
-            _logger.LogInformation("Lightning invoice sent successfully.");
-
-            var payInvoiceResponse = await response.Content.ReadFromJsonAsync<PayInvoiceResponse>();
-            if (payInvoiceResponse == null)
-            {
-                throw new InvalidOperationException("The response content could not be deserialized into a PayInvoiceResponse object.");
-            }
-
-            return payInvoiceResponse;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error sending lightning invoice");
-            throw;
-        }
-    }
-
-    public async Task<string> SendOnchainPayment(long amountSat, string address, int feerateSatByte)
-    {
-        var data = new Dictionary<string, string>
-        {
-            { "amountSat", amountSat.ToString() },
-            { "address", address },
-            { "feerateSatByte", feerateSatByte.ToString() }
-        };
-
-        try
-        {
-            var response = await _httpClient.PostAsync("/sendtoaddress", new FormUrlEncodedContent(data));
-            response.EnsureSuccessStatusCode();
-            _logger.LogInformation("Onchain payment sent successfully.");
-            return await response.Content.ReadAsStringAsync();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error sending onchain payment");
-            throw;
-        }
-    }
-
-    public async Task<List<PaymentInfo>> ListIncomingPayments(string externalId)
-    {
-        try
-        {
-            var response = await _httpClient.GetAsync($"/payments/incoming?externalId={externalId}");
-            response.EnsureSuccessStatusCode();
-
-            var paymentInfos = await response.Content.ReadFromJsonAsync<List<PaymentInfo>>();
-            if (paymentInfos == null)
-            {
-                throw new InvalidOperationException("The response content could not be deserialized into a List<PaymentInfo> object.");
-            }
-
-            return paymentInfos;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error listing incoming payments");
-            throw;
-        }
-    }
-
-    public async Task<PaymentInfo> GetIncomingPayment(string paymentHash)
-    {
-        try
-        {
-            var response = await _httpClient.GetAsync($"/payments/incoming/{paymentHash}");
-            response.EnsureSuccessStatusCode();
-
-            var paymentInfo = await response.Content.ReadFromJsonAsync<PaymentInfo>();
-            if (paymentInfo == null)
-            {
-                throw new InvalidOperationException("The response content could not be deserialized into a PaymentInfo object.");
-            }
-
-            return paymentInfo;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting incoming payment");
-            throw;
-        }
-    }
-
-    public async Task<PaymentInfoOutgoing> GetOutgoingPayment(string paymentId)
-    {
-        try
-        {
-            var response = await _httpClient.GetAsync($"/payments/outgoing/{paymentId}");
-            response.EnsureSuccessStatusCode();
-
-            var paymentInfoOutgoing = await response.Content.ReadFromJsonAsync<PaymentInfoOutgoing>();
-            if (paymentInfoOutgoing == null)
-            {
-                throw new InvalidOperationException("The response content could not be deserialized into a PaymentInfoOutgoing object.");
-            }
-
-            return paymentInfoOutgoing;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting outgoing payment");
-            throw;
-        }
+        return parameters.Count == 0 ? string.Empty : "?" + string.Join("&", parameters);
     }
 }
