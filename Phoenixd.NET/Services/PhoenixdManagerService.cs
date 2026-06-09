@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
+using Phoenixd.NET.Client;
 using Phoenixd.NET.Hubs;
 using Phoenixd.NET.Interfaces;
 using Phoenixd.NET.Models;
-using Phoenixd.NET.WebService.Client;
 
 namespace Phoenixd.NET.Services;
 

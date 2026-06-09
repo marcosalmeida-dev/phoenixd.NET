@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Phoenixd.NET.WebService.Client;
+using Phoenixd.NET.Client;
 
 namespace Phoenixd.NET.Services;
 

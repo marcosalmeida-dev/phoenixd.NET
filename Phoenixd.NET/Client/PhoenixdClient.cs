@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 using Phoenixd.NET.Json;
 using Phoenixd.NET.Models;
 
-namespace Phoenixd.NET.WebService.Client;
+namespace Phoenixd.NET.Client;
 
 /// <summary>
 /// Maintains a resilient websocket connection to phoenixd's <c>/websocket</c> endpoint and surfaces

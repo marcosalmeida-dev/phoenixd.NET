@@ -2,10 +2,10 @@ using System.Net.Http.Headers;
 using System.Text;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Phoenixd.NET.Client;
 using Phoenixd.NET.Interfaces;
 using Phoenixd.NET.Models;
 using Phoenixd.NET.Services;
-using Phoenixd.NET.WebService.Client;
 
 namespace Phoenixd.NET;
 
