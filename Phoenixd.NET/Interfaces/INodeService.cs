@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Phoenixd.NET.Models;
 
 namespace Phoenixd.NET.Interfaces;
@@ -9,7 +10,11 @@ public interface INodeService
 
     Task<Balance> GetBalance(CancellationToken cancellationToken = default);
 
+    /// <summary>Lists channel summaries from <c>GET /getinfo</c>.</summary>
     Task<List<Channel>> ListChannels(CancellationToken cancellationToken = default);
+
+    /// <summary>Returns complete channel state objects from <c>GET /listchannels</c>.</summary>
+    Task<List<JsonElement>> ListChannelStatesAsync(CancellationToken cancellationToken = default);
 
     Task<CloseChannelResponse> CloseChannel(string channelId, string address, int feerateSatByte, CancellationToken cancellationToken = default);
 

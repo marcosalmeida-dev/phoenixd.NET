@@ -6,7 +6,13 @@ namespace Phoenixd.NET.Models;
 /// </summary>
 public class PaymentInfoOutgoing
 {
-    /// <summary>Discriminates the kind of outgoing payment (e.g. lightning vs. on-chain).</summary>
+    /// <summary>Response discriminator, <c>outgoing_payment</c>.</summary>
+    public string? Type { get; set; }
+
+    /// <summary>
+    /// Payment category: lightning, auto_liquidity, manual_liquidity, splice_out, splice_cpfp,
+    /// or channel_close.
+    /// </summary>
     public string? SubType { get; set; }
 
     /// <summary>The phoenixd payment id (UUID).</summary>
@@ -15,12 +21,12 @@ public class PaymentInfoOutgoing
     public string? PaymentHash { get; set; }
     public string? Preimage { get; set; }
 
-    /// <summary>On-chain transaction id, for on-chain (sendtoaddress) payments.</summary>
+    /// <summary>Transaction id for on-chain payments, including liquidity purchases and channel operations.</summary>
     public string? TxId { get; set; }
 
     public bool IsPaid { get; set; }
 
-    /// <summary>Amount sent in satoshis.</summary>
+    /// <summary>Amount in satoshis, including the payment fees.</summary>
     public long Sent { get; set; }
 
     /// <summary>Fees in <b>millisatoshis</b>.</summary>

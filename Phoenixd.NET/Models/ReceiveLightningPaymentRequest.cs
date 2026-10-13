@@ -5,7 +5,7 @@ public class ReceiveLightningPaymentRequest
 {
     public string? Description { get; set; }
 
-    /// <summary>Amount in satoshis. Use 0 / a null-amount invoice for an any-amount invoice.</summary>
+    /// <summary>Explicit invoice amount in satoshis. Use CreateInvoiceRequest with a null amount for an amountless invoice.</summary>
     public long AmountSat { get; set; }
 
     /// <summary>Optional caller-supplied identifier echoed back on payment events.</summary>

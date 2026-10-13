@@ -29,10 +29,10 @@ public sealed class PhoenixdClient
 
     public PhoenixdClient(PhoenixConfig phoenixConfig, ILogger<PhoenixdClient> logger)
     {
-        _phoenixConfig = phoenixConfig ?? throw new ArgumentNullException(nameof(phoenixConfig));
+        _phoenixConfig = (phoenixConfig ?? throw new ArgumentNullException(nameof(phoenixConfig))).ResolvePasswordFiles();
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _websocketUri = BuildWebsocketUri(phoenixConfig.Host);
-        _authorizationHeader = "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes($":{phoenixConfig.Token}"));
+        _websocketUri = BuildWebsocketUri(_phoenixConfig.Host);
+        _authorizationHeader = "Basic " + _phoenixConfig.BasicAuthenticationParameter;
     }
 
     /// <summary>

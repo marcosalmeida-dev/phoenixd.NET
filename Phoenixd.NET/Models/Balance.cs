@@ -11,4 +11,10 @@ public class Balance
     /// enough to justify an on-chain channel operation; this credit is used towards future fees.
     /// </summary>
     public long FeeCreditSat { get; set; }
+
+    /// <summary>
+    /// On-chain funds waiting for automatic swap-in. Absent when the daemon's swap-in wallet
+    /// is unavailable. These amounts are separate from the spendable Lightning balance.
+    /// </summary>
+    public SwapInBalance? SwapIn { get; set; }
 }

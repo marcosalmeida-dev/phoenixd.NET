@@ -1,5 +1,4 @@
 using System.Net.Http.Headers;
-using System.Text;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Phoenixd.NET.Client;
@@ -25,6 +24,8 @@ public static class ServiceCollection
             throw new InvalidOperationException("PhoenixConfig.Host must be configured.");
         }
 
+        phoenixConfig = phoenixConfig.ResolvePasswordFiles();
+
         services.AddSingleton(phoenixConfig);
 
         // The websocket client manages a single long-lived connection.
@@ -47,8 +48,7 @@ public static class ServiceCollection
         client.BaseAddress = new Uri(config.Host);
         client.Timeout = TimeSpan.FromSeconds(config.RequestTimeoutSeconds > 0 ? config.RequestTimeoutSeconds : 30);
 
-        var credentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{config.Username}:{config.Token}"));
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", credentials);
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", config.BasicAuthenticationParameter);
         client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
     }
 }

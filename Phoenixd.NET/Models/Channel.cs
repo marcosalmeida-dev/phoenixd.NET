@@ -1,6 +1,6 @@
 namespace Phoenixd.NET.Models;
 
-/// <summary>A Lightning channel as reported by <c>GET /listchannels</c> and <c>GET /getinfo</c>.</summary>
+/// <summary>A Lightning channel summary as reported by <c>GET /getinfo</c>.</summary>
 public class Channel
 {
     public string State { get; set; } = string.Empty;

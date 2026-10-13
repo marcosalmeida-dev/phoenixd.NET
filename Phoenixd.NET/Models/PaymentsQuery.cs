@@ -19,7 +19,7 @@ public class PaymentsQuery
     /// <summary>Number of results to skip (for paging).</summary>
     public int? Offset { get; set; }
 
-    /// <summary>When true, include payments that are not yet paid/confirmed.</summary>
+    /// <summary>Include unpaid incoming or failed outgoing payments. Pending outgoing payments are included by default.</summary>
     public bool? All { get; set; }
 
     /// <summary>Filter by the caller-supplied external id (incoming payments only).</summary>

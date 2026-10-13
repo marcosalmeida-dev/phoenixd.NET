@@ -6,7 +6,10 @@ namespace Phoenixd.NET.Models;
 /// </summary>
 public class PaymentInfo
 {
-    /// <summary>Discriminates the kind of incoming payment (e.g. bolt11, bolt12, etc.).</summary>
+    /// <summary>Response discriminator, <c>incoming_payment</c>.</summary>
+    public string? Type { get; set; }
+
+    /// <summary>Incoming payment category. phoenixd 0.9.x reports <c>lightning</c>.</summary>
     public string? SubType { get; set; }
 
     public string PaymentHash { get; set; } = string.Empty;
@@ -19,7 +22,7 @@ public class PaymentInfo
 
     public bool IsPaid { get; set; }
 
-    /// <summary>True when the invoice expired before being paid.</summary>
+    /// <summary>True when the BOLT11 invoice expiry has passed, including for paid invoices.</summary>
     public bool IsExpired { get; set; }
 
     /// <summary>Amount requested on the invoice in satoshis (null for any-amount invoices).</summary>

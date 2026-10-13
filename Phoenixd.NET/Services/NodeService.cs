@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Phoenixd.NET.Interfaces;
 using Phoenixd.NET.Models;
@@ -17,12 +19,15 @@ internal sealed class NodeService : PhoenixdServiceBase, INodeService
     public Task<Balance> GetBalance(CancellationToken cancellationToken = default) =>
         GetJsonAsync<Balance>("/getbalance", nameof(GetBalance), cancellationToken);
 
-    public Task<List<Channel>> ListChannels(CancellationToken cancellationToken = default) =>
-        GetJsonAsync<List<Channel>>("/listchannels", nameof(ListChannels), cancellationToken);
+    public async Task<List<Channel>> ListChannels(CancellationToken cancellationToken = default) =>
+        (await GetNodeInfo(cancellationToken).ConfigureAwait(false)).Channels;
+
+    public Task<List<JsonElement>> ListChannelStatesAsync(CancellationToken cancellationToken = default) =>
+        GetJsonAsync<List<JsonElement>>("/listchannels", nameof(ListChannelStatesAsync), cancellationToken);
 
     public Task<LiquidityFees> EstimateLiquidityFees(long amountSat, CancellationToken cancellationToken = default) =>
         GetJsonAsync<LiquidityFees>(
-            $"/estimateliquidityfees?amountSat={amountSat}",
+            $"/estimateliquidityfees?amountSat={amountSat.ToString(CultureInfo.InvariantCulture)}",
             nameof(EstimateLiquidityFees),
             cancellationToken);
 
@@ -31,21 +36,28 @@ internal sealed class NodeService : PhoenixdServiceBase, INodeService
         var content = Form(
             ("channelId", channelId),
             ("address", address),
-            ("feerateSatByte", feerateSatByte.ToString()));
+            ("feerateSatByte", feerateSatByte.ToString(CultureInfo.InvariantCulture)));
 
         var body = await PostStringAsync("/closechannel", content, nameof(CloseChannel), cancellationToken)
             .ConfigureAwait(false);
 
-        // phoenixd replies with the closing txid (or "ok"); anything else is treated as an error.
-        return string.IsNullOrWhiteSpace(body)
-            ? new CloseChannelResponse { Status = "error", Message = "Empty response" }
-            : new CloseChannelResponse { Status = "ok", Message = body };
+        // Channel failures are also sent with status 200; only a transaction id indicates success.
+        var succeeded = body.Length == 64 && body.All(Uri.IsHexDigit);
+        return new CloseChannelResponse
+        {
+            Status = succeeded ? "ok" : "error",
+            Message = string.IsNullOrWhiteSpace(body) ? "Empty response" : body
+        };
     }
 
-    public Task<string> BumpFee(int feerateSatByte, CancellationToken cancellationToken = default) =>
-        PostStringAsync(
+    public async Task<string> BumpFee(int feerateSatByte, CancellationToken cancellationToken = default)
+    {
+        var body = await PostStringAsync(
             "/bumpfee",
-            Form(("feerateSatByte", feerateSatByte.ToString())),
+            Form(("feerateSatByte", feerateSatByte.ToString(CultureInfo.InvariantCulture))),
             nameof(BumpFee),
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
+
+        return ValidateTransactionId(body, nameof(BumpFee));
+    }
 }

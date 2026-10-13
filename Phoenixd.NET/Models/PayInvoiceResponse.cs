@@ -6,6 +6,9 @@ namespace Phoenixd.NET.Models;
 /// </summary>
 public class PayInvoiceResponse
 {
+    /// <summary>Response discriminator, <c>payment_sent</c>, when included by the daemon.</summary>
+    public string? Type { get; set; }
+
     public long RecipientAmountSat { get; set; }
     public long RoutingFeeSat { get; set; }
 

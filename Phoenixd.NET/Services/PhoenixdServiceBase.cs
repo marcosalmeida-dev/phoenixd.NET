@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
@@ -32,6 +33,18 @@ internal abstract class PhoenixdServiceBase
         return new FormUrlEncodedContent(present);
     }
 
+    /// <summary>phoenixd may return an operation failure as text with an HTTP 200 status.</summary>
+    protected static string ValidateTransactionId(string body, string operation)
+    {
+        if (body.Length != 64 || !body.All(Uri.IsHexDigit))
+        {
+            throw new PhoenixdApiException($"{operation}: phoenixd did not return a transaction id.",
+                responseBody: body);
+        }
+
+        return body;
+    }
+
     protected async Task<T> GetJsonAsync<T>(string path, string operation, CancellationToken cancellationToken)
     {
         try
@@ -53,6 +66,27 @@ internal abstract class PhoenixdServiceBase
             await EnsureSuccessAsync(response, operation, cancellationToken).ConfigureAwait(false);
             var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             return body.Trim();
+        }
+        catch (Exception ex) when (LogRequestError(ex, operation))
+        {
+            throw;
+        }
+    }
+
+    /// <summary>Returns null when a payment lookup has no match; other failures still propagate.</summary>
+    protected async Task<T?> GetOptionalJsonAsync<T>(string path, string operation, CancellationToken cancellationToken)
+        where T : class
+    {
+        try
+        {
+            using var response = await HttpClient.GetAsync(path, cancellationToken).ConfigureAwait(false);
+            // phoenixd maps an empty database result to 404; older versions may return 204.
+            if (response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.NoContent)
+            {
+                return null;
+            }
+
+            return await DeserializeAsync<T>(response, operation, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (LogRequestError(ex, operation))
         {
